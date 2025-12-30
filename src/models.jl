@@ -2,7 +2,7 @@ struct NPCLayer{T} <: Lux.AbstractLuxLayer
     npoints::Int
     half_precision::T # precision here is the reciprocal of variance
     log_const::T
-    NPCLayer(npoints=8, stddev::T) where {T} = new{T}(npoints, stddev^-2 / 2, -log(stddev^2 * 2π) / 2)
+    NPCLayer(stddev::T, npoints=8) where {T} = new{T}(npoints, stddev^-2 / 2, -log(stddev^2 * 2π) / 2)
 end
 
 function (l::NPCLayer{T})(_, ps, st) where {T}
