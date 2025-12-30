@@ -15,7 +15,7 @@ function (l::NPCLayer{T})(_, ps, st) where {T}
         5.497787143782138]) .+ mod(ps.offset_angle[1], T(π / 4))
     x = ps.radius[1] .* cos.(angles) .+ ps.center[1]
     y = ps.radius[1] .* sin.(angles) .+ ps.center[2]
-    z = fill!(similar(x), ps.center[3])
+    z = ps.center[3] .* ones(T, length(angles))
     return hcat(x, y, z), st
 end
 Lux.initialparameters(rng::AbstractRNG, ::NPCLayer{T}) where {T} = (center=rand(rng, T, 1, 3), offset_angle=rand(rng, T, 1, 1) .* T(π / 4), radius=[T(2)],)
