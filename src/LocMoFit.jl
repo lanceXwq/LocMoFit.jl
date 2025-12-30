@@ -8,6 +8,6 @@ using LinearAlgebra
 include("models.jl")
 include("loss.jl")
 
-export NPCLayer, luxloss, optloss
+export NPCLayer, NPC3DLayer, luxloss, optloss
 
 end
