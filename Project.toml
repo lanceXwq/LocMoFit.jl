@@ -4,6 +4,7 @@ version = "1.0.0-DEV"
 authors = ["Lance (Weiqing) Xu <lance.xwq@gmail.com> and contributors"]
 
 [deps]
+Distances = "b4f34e82-e78d-54a5-968a-f98e89d6e8f7"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Lux = "b2108857-7c20-44ae-9111-449ecde12c47"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
@@ -11,12 +12,13 @@ Rotations = "6038ab10-8711-5258-84ad-4b1120ba62dc"
 Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [compat]
+Distances = "0.10.12"
 LinearAlgebra = "1.12.0"
 Lux = "1.29.0"
 Random = "1.11.0"
 Rotations = "1.7.1"
 Zygote = "0.7.10"
-julia = "1.12"
+julia = "1.10"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
