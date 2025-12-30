@@ -32,7 +32,7 @@ function (l::NPC3DLayer{T})(_, ps, st) where {T}
     z = ps.center[3] .* ones(T, length(angles))
     x2 = ps.radius[1] .* cos.(angles) .+ ps.center[1]
     y2 = ps.radius[1] .* sin.(angles) .+ ps.center[2]
-    z2 = (ps.center[3] + ps.distance) .* ones(T, length(angles))
+    z2 = (ps.center[3] + ps.distance[1]) .* ones(T, length(angles))
     return hcat(vcat(x, x2), vcat(y, y2), vcat(z, z2)), st
 end
 
