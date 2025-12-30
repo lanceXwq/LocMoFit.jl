@@ -1,18 +1,12 @@
 struct NPCLayer{T} <: Lux.AbstractLuxLayer
+    npoints::Int
     half_precision::T # precision here is the reciprocal of variance
     log_const::T
-    NPCLayer(stddev::T) where {T} = new{T}(stddev^-2 / 2, -log(stddev^2 * 2π) / 2)
+    NPCLayer(npoints=8, stddev::T) where {T} = new{T}(npoints, stddev^-2 / 2, -log(stddev^2 * 2π) / 2)
 end
 
 function (l::NPCLayer{T})(_, ps, st) where {T}
-    angles = T.([0.0
-        0.7853981633974483
-        1.5707963267948966
-        2.356194490192345
-        3.141592653589793
-        3.9269908169872414
-        4.71238898038469
-        5.497787143782138]) .+ mod(ps.offset_angle[1], T(π / 4))
+    angles = T.([2π / l.npoints * n for n in 0:(l.npoints-1)]) .+ mod(ps.offset_angle[1], T(2π / l.npoints))
     x = ps.radius[1] .* cos.(angles) .+ ps.center[1]
     y = ps.radius[1] .* sin.(angles) .+ ps.center[2]
     z = ps.center[3] .* ones(T, length(angles))
