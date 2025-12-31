@@ -1,12 +1,29 @@
-function pairwise_distances²(𝐱_data::AbstractMatrix{T}, 𝐱_model::AbstractMatrix{T}) where {T}
-    data_norms = sum(abs2, 𝐱_data; dims=2)
-    model_norms = sum(abs2, 𝐱_model; dims=2)
-    model_norms .+ data_norms' .- 2 .* (𝐱_model * 𝐱_data')
+"""
+    pairwise_distances²(X, Y)
+
+Compute squared Euclidean distances between all pairs of points in `X` and `Y`.
+
+# Examples
+```jldoctest
+julia> X = [1.0 2.0; 3.0 4.0; 5.0 6.0]; Y = [1.0 2.0; 3.0 4.0];
+
+julia> LocMoFit.pairwise_distances²(X,Y)
+2×3 Matrix{Float64}:
+ 0.0  8.0  32.0
+ 8.0  0.0   8.0
+```
+"""
+function pairwise_distances²(X::AbstractMatrix{T}, Y::AbstractMatrix{T}) where {T}
+    X² = sum(abs2, X; dims=2)
+    Y² = sum(abs2, Y; dims=2)
+    Y² .+ X²' .- 2 .* (Y * X')
 end
 
+# function pairwise_distances²
+
 function negative_log_likelihood(datapoints::AbstractMatrix{T}, modelpoints::AbstractMatrix{T}, half_τ::T, log_const::T) where {T}
-    distances² = pairwise_distances²(datapoints, modelpoints)
-    per_pair_lls = muladd.(-distances², half_τ, log_const)
+    Δx² = pairwise_distances²(datapoints, modelpoints)
+    per_pair_lls = muladd.(-Δx², half_τ, log_const)
     -sum(logsumexp(per_pair_lls; dims=1)) # may need a vec() in the future
 end
 

@@ -1,4 +1,4 @@
-struct NPCLayer{T} <: Lux.AbstractLuxLayer
+struct NPCLayer{T} <: LuxCore.AbstractLuxLayer
     npoints::Int
     half_precision::T # precision here is the reciprocal of variance
     log_const::T
@@ -13,12 +13,12 @@ function (l::NPCLayer{T})(_, ps, st) where {T}
     return hcat(x, y, z), st
 end
 
-Lux.initialparameters(rng::AbstractRNG, ::NPCLayer{T}) where {T} = (center=rand(rng, T, 1, 3), offset_angle=rand(rng, T, 1, 1) .* T(π / 4), radius=[T(2)],)
-Lux.initialstates(::AbstractRNG, ::NPCLayer) = NamedTuple()
-Lux.parameterlength(l::NPCLayer) = 5
-Lux.statelength(::NPCLayer) = 0
+LuxCore.initialparameters(rng::AbstractRNG, ::NPCLayer{T}) where {T} = (center=rand(rng, T, 1, 3), offset_angle=rand(rng, T, 1, 1) .* T(π / 4), radius=[T(2)],)
+LuxCore.initialstates(::AbstractRNG, ::NPCLayer) = NamedTuple()
+LuxCore.parameterlength(l::NPCLayer) = 5
+LuxCore.statelength(::NPCLayer) = 0
 
-struct NPC3DLayer{T} <: Lux.AbstractLuxLayer
+struct NPC3DLayer{T} <: LuxCore.AbstractLuxLayer
     npoints::Int
     half_precision::T # precision here is the reciprocal of variance
     log_const::T
@@ -36,7 +36,7 @@ function (l::NPC3DLayer{T})(_, ps, st) where {T}
     return hcat(vcat(x, x2), vcat(y, y2), vcat(z, z2)), st
 end
 
-Lux.initialparameters(rng::AbstractRNG, ::NPC3DLayer{T}) where {T} = (center=rand(rng, T, 1, 3), offset_angle=rand(rng, T, 1, 1) .* T(π / 4), radius=[T(2)], distance=[T(5)],)
-Lux.initialstates(::AbstractRNG, ::NPC3DLayer) = NamedTuple()
-Lux.parameterlength(l::NPC3DLayer) = 6
-Lux.statelength(::NPC3DLayer) = 0
+LuxCore.initialparameters(rng::AbstractRNG, ::NPC3DLayer{T}) where {T} = (center=rand(rng, T, 1, 3), offset_angle=rand(rng, T, 1, 1) .* T(π / 4), radius=[T(2)], distance=[T(5)],)
+LuxCore.initialstates(::AbstractRNG, ::NPC3DLayer) = NamedTuple()
+LuxCore.parameterlength(l::NPC3DLayer) = 6
+LuxCore.statelength(::NPC3DLayer) = 0
