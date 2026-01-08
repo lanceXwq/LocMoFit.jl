@@ -5,7 +5,7 @@ Compute squared Euclidean distances between all pairs of points in `X` and `Y`.
 
 # Examples
 ```jldoctest
-julia> X = [1.0 2.0; 3.0 4.0; 5.0 6.0]; Y = [1.0 2.0; 3.0 4.0];
+julia> X = [1.0 3.0 5.0; 2.0 4.0 6.0]; Y = [1.0 3.0; 2.0 4.0];
 
 julia> LocMoFit.pairwise_distances²(X,Y)
 2×3 Matrix{Float64}:
@@ -46,7 +46,6 @@ function optloss(θ, p)
     datapoints = p.data
     input = p.input
     modelpoints, _ = model(input, θ, st)
-    # R = get_rotation_matrix(p.ps.orientation...)
     return negative_log_likelihood(datapoints, modelpoints,
         p.half_precision, p.log_const)
 end
