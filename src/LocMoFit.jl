@@ -1,10 +1,10 @@
 module LocMoFit
 
-using Lux
+using LuxCore
 using NNlib: logsumexp
 using Random
 using Distances: SqMahalanobis, pairwise
-using Rotations: RotZ, AngleAxis, Rotation
+using Rotations: RotZ, AngleAxis
 using LinearAlgebra
 using ComponentArrays: ComponentArray
 
@@ -15,10 +15,8 @@ include("transformations.jl")
 include("models.jl")
 include("loss.jl")
 
-const setup = Lux.setup
-const share_parameters = Lux.Experimental.share_parameters
-const Training = Lux.Training
+const setup = LuxCore.setup
 
-export NPCLayer, NPC3DLayer, luxloss, optloss
+export Ring, NuclearPoreComplex, luxloss, optloss
 
 end
