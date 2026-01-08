@@ -13,13 +13,17 @@ julia> LocMoFit.pairwise_distances²(X,Y)
  8.0  0.0   8.0
 ```
 """
-function pairwise_distances²(X::AbstractMatrix{T}, Y::AbstractMatrix{T}) where {T}
-    X² = sum(abs2, X; dims=2)
-    Y² = sum(abs2, Y; dims=2)
-    Y² .+ X²' .- 2 .* (Y * X')
-end
+# function pairwise_distances²(X::AbstractMatrix{T}, Y::AbstractMatrix{T}) where {T}
+#     X² = sum(abs2, X; dims=2)
+#     Y² = sum(abs2, Y; dims=2)
+#     Y² .+ X²' .- 2 .* (Y * X')
+# end
 
-# function pairwise_distances²
+function pairwise_distances²(X::AbstractMatrix{T}, Y::AbstractMatrix{T}) where {T}
+    X² = sum(abs2, X; dims=1)
+    Y² = sum(abs2, Y; dims=1)
+    Y²' .+ X² .- 2 .* (Y' * X)
+end
 
 function negative_log_likelihood(datapoints::AbstractMatrix{T}, modelpoints::AbstractMatrix{T}, half_τ::T, log_const::T) where {T}
     Δx² = pairwise_distances²(datapoints, modelpoints)
@@ -27,19 +31,23 @@ function negative_log_likelihood(datapoints::AbstractMatrix{T}, modelpoints::Abs
     -sum(logsumexp(per_pair_lls; dims=1)) # may need a vec() in the future
 end
 
+# negative_log_likelihood(datapoints::AbstractMatrix{T}, modelpoints::AbstractMatrix{T}, half_τ::T, log_const::T, R::Rotation{N,T}) where {N,T} = negative_log_likelihood(datapoints * R, modelpoints, half_τ, log_const)
+
 function luxloss(model, ps, st, data)
-    positions, st = model((), ps, st)
-    loss = negative_log_likelihood(data, positions, model.half_precision, model.log_const)
+    positions, st = model(data.in, ps, st)
+    loss = negative_log_likelihood(data.out, positions, data.half_precision, data.log_const)
     return loss, st, NamedTuple()
 end
 
 function optloss(θ, p)
     # `p` is whatever you pass into OptimizationProblem
     model = p.model
-    st0 = p.st
+    st = p.st
     datapoints = p.data
-    modelpoints, _ = model((), θ, st0)
+    input = p.input
+    modelpoints, _ = model(input, θ, st)
+    # R = get_rotation_matrix(p.ps.orientation...)
     return negative_log_likelihood(datapoints, modelpoints,
-        model.half_precision, model.log_const)
+        p.half_precision, p.log_const)
 end
 
