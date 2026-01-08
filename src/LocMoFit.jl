@@ -11,8 +11,6 @@ using ComponentArrays: ComponentArray
 include("basic shapes.jl")
 include("composite shapes.jl")
 include("transformations.jl")
-
-include("models.jl")
 include("loss.jl")
 
 const setup = LuxCore.setup
