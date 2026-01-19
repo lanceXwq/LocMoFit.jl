@@ -6,3 +6,4 @@
 *.md
 *_video_*
 plotting*
+simulation*.jl
