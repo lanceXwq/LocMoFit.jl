@@ -1,2 +1,8 @@
 /Manifest*.toml
+.vscode
 .DS_Store
+*.mp4
+*.csv
+*.md
+*_video_*
+plotting*
