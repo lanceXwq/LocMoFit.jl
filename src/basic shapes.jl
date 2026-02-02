@@ -47,31 +47,3 @@ function (r::Disk)(unit_model, ps, st)
     rot_trans!(X, ps.θ, ps.ϕ, view(ps, 1:3))
     return X, st
 end
-
-const SPCAP_SYMS = (:x, :y, :z, :r, :ϑ, :φ₀, :θ, :ϕ)
-struct SphericalCap{T,F} <: LuxCore.AbstractLuxLayer end
-SphericalCap(T::Type{<:AbstractFloat}=Float32; fixed::Tuple{Vararg{Symbol}}=()) = SphericalCap{T,fixed}()
-
-LuxCore.initialparameters(rng::AbstractRNG, ::SphericalCap{T}) where {T} = ComponentArray(
-    x=randn(rng, T),
-    y=randn(rng, T),
-    z=randn(rng, T),
-    c=rand(rng, T),
-    ϑ=rand(rng, T),
-    φ₀=rand(rng, T),
-    θ=rand(rng, T),
-    ϕ=rand(rng, T),
-)
-LuxCore.initialstates(::AbstractRNG, ::SphericalCap) = NamedTuple()
-LuxCore.parameterlength(::SphericalCap) = 8
-LuxCore.statelength(::SphericalCap) = 0
-setup(rng::AbstractRNG, sc::SphericalCap{T}; npoints::Integer=100) where {T} = LuxCore.setup(rng, sc)..., unit_sphere(T, npoints)
-
-function (::SphericalCap{T})(unit_sphere, ps, st) where {T}
-    X = unit_sphere_to_cap(unit_sphere, ps.ϑ)
-    r = 1 / ps.c
-    scale!(X, r)
-    trans!(X, -r, dims=3)
-    rot_trans!(X, ps.θ, ps.ϕ, view(ps, 1:3))
-    return X, st
-end

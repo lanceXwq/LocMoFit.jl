@@ -1,5 +1,5 @@
 """
-    pairwise_distances²(X, Y)
+    pairwise_sqdist(X, Y)
 
 Compute squared Euclidean distances between all pairs of points in `X` and `Y`.
 
@@ -7,24 +7,57 @@ Compute squared Euclidean distances between all pairs of points in `X` and `Y`.
 ```jldoctest
 julia> X = [1.0 3.0 5.0; 2.0 4.0 6.0]; Y = [1.0 3.0; 2.0 4.0];
 
-julia> LocMoFit.pairwise_distances²(X,Y)
+julia> LocMoFit.pairwise_sqdist(X,Y)
 2×3 Matrix{Float64}:
  0.0  8.0  32.0
  8.0  0.0   8.0
 ```
 """
-function pairwise_distances²(X::AbstractMatrix{T}, Y::AbstractMatrix{T}) where {T}
+function pairwise_sqdist(X::AbstractMatrix{T}, Y::AbstractMatrix{T}) where {T}
     X² = sum(abs2, X; dims=1)
     Y² = sum(abs2, Y; dims=1)
     Y²' .+ X² .- 2 .* (Y' * X)
 end
 
-negative_log_likelihood(datapoints::AbstractMatrix{T}, modelpoints, half_τ::T, log_const::T) where {T} = negative_log_likelihood(datapoints, hcat(modelpoints...), half_τ, log_const)
+function pairwise_sqdist(X::AbstractMatrix{T},
+    Y::AbstractMatrix{T},
+    invΣ::AbstractMatrix{T}) where {T}
+    D² = muladd((Y .^ 2)', invΣ, sum(invΣ .* X .^ 2; dims=1))
+    mul!(D², Y', invΣ .* X, -T(2), one(T))
+end
+
+function pairwise_sqdist2(X::AbstractMatrix{T},
+    Y::AbstractMatrix{T},
+    invΣ::AbstractMatrix{T}) where {T}
+    # X: d×N, Y: d×M, invΣ: d×N  => D2: M×N
+    M = size(Y, 2)
+    N = size(X, 2)
+    D2 = fill!(similar(X, M, N), 0)
+
+    @inbounds for i in axes(X, 1)
+        yi = @view Y[i, :]        # length M
+        xi = @view X[i, :]        # length N
+        wi = @view invΣ[i, :]     # length N
+
+        # reshape(yi, M, 1) - reshape(xi, 1, N) broadcasts to M×N
+        D2 .+= abs2.(reshape(yi, :, 1) .- reshape(xi, 1, :)) .* reshape(wi, 1, :)
+    end
+    return D2
+end
+
+
+negative_log_likelihood(datapoints, modelpoints, half_τ, log_const) = negative_log_likelihood(datapoints, hcat(modelpoints...), half_τ, log_const)
 
 function negative_log_likelihood(datapoints::AbstractMatrix{T}, modelpoints::AbstractMatrix{T}, half_τ::T, log_const::T) where {T}
-    Δx² = pairwise_distances²(datapoints, modelpoints)
-    per_pair_lls = muladd.(-Δx², half_τ, log_const)
-    -sum(logsumexp(per_pair_lls; dims=1)) # may need a vec() in the future
+    Δx² = pairwise_sqdist(datapoints, modelpoints)
+    per_pair_lls = muladd.(Δx², -half_τ, log_const)
+    logsumexp(per_pair_lls; dims=1) |> sum |> (x -> -x) # may need a vec() in the future
+end
+
+function negative_log_likelihood(datapoints::AbstractMatrix{T}, modelpoints::AbstractMatrix{T}, half_τ::AbstractMatrix{T}, log_const::AbstractMatrix{T}) where {T}
+    Δx² = pairwise_sqdist(datapoints, modelpoints, half_τ)
+    per_pair_lls = log_const .- Δx²
+    logsumexp(per_pair_lls; dims=1) |> sum |> (x -> -x) # may need a vec() in the future
 end
 
 function luxloss(model, ps, st, data)
@@ -43,3 +76,14 @@ function optloss(θ, p)
         p.half_precision, p.log_const)
 end
 
+function half_precision(stddev::AbstractArray; dtype::Type{<:AbstractFloat})
+    halfτ = similar(stddev, dtype)
+    @. halfτ = stddev^-2 / 2
+    return halfτ
+end
+
+function log_norm_const(stddev::AbstractArray; dtype::Type{<:AbstractFloat})
+    C = similar(stddev, dtype, 1, axes(stddev, 2))
+    C .= -0.5 .* log.(prod(abs2, stddev, dims=1))
+    return C
+end
