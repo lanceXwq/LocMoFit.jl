@@ -26,26 +26,6 @@ function pairwise_sqdist(X::AbstractMatrix{T},
     mul!(D², Y', invΣ .* X, -T(2), one(T))
 end
 
-function pairwise_sqdist2(X::AbstractMatrix{T},
-    Y::AbstractMatrix{T},
-    invΣ::AbstractMatrix{T}) where {T}
-    # X: d×N, Y: d×M, invΣ: d×N  => D2: M×N
-    M = size(Y, 2)
-    N = size(X, 2)
-    D2 = fill!(similar(X, M, N), 0)
-
-    @inbounds for i in axes(X, 1)
-        yi = @view Y[i, :]        # length M
-        xi = @view X[i, :]        # length N
-        wi = @view invΣ[i, :]     # length N
-
-        # reshape(yi, M, 1) - reshape(xi, 1, N) broadcasts to M×N
-        D2 .+= abs2.(reshape(yi, :, 1) .- reshape(xi, 1, :)) .* reshape(wi, 1, :)
-    end
-    return D2
-end
-
-
 negative_log_likelihood(datapoints, modelpoints, half_τ, log_const) = negative_log_likelihood(datapoints, hcat(modelpoints...), half_τ, log_const)
 
 function negative_log_likelihood(datapoints::AbstractMatrix{T}, modelpoints::AbstractMatrix{T}, half_τ::T, log_const::T) where {T}

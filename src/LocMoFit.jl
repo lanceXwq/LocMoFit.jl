@@ -22,14 +22,24 @@ include("loss.jl")
 
 export Ring, SphericalCap, NuclearPoreComplex, luxloss, optloss, run_locmofit
 
-function run_locmofit(model_name::String, locs::AbstractMatrix{<:Real}, loc_precisions::AbstractMatrix{<:Real}; seed=1, max_iter::Integer=200, dtype::Type{<:AbstractFloat}=Float32, init::NamedTuple=NamedTuple(), freeze::Tuple{Vararg{Symbol}}=Tuple{}(), spacing::Real=3.0)
+function run_locmofit(
+    model_name::String,
+    locs::AbstractMatrix{<:Real},
+    loc_precisions::AbstractMatrix{<:Real};
+    init_params::NamedTuple=NamedTuple(),
+    freeze::Tuple{Vararg{Symbol}}=Tuple{}(),
+    max_iter::Integer=200,
+    spacing::Real=3.0,
+    dtype::Type{<:AbstractFloat}=Float32,
+    seed=1,
+)
     rng = Random.default_rng()
     Random.seed!(rng, seed)
 
     model = build_model(model_name)
     ps = initialparameters(model, dtype)
     st = Lux.initialstates(rng, model)
-    apply_init!(ps, init)
+    apply_init!(ps, init_params)
 
     umodel = unit_model(model, ps, spacing=spacing)
     umodel_copy = copy(umodel)

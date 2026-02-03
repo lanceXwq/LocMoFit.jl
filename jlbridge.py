@@ -1,9 +1,16 @@
 import numpy as np
 from typing import Tuple, Optional, Mapping, Any
 from juliacall import Main as jl
-from juliacall import convert
 
 jl.seval("using LocMoFit")
+
+
+def normalize_dtype(dtype):
+    if dtype in ("float32", "fp32"):
+        return jl.Float32
+    if dtype in ("float64", "fp64"):
+        return jl.Float64
+    return dtype
 
 
 def _dict_to_namedtuple(d: dict):
@@ -70,25 +77,24 @@ def run_locmofit(
     locs: np.ndarray,
     loc_precisions: np.ndarray,
     *,
-    init: Optional[Mapping[str, Any]] = None,
+    init_params: Optional[Mapping[str, Any]] = None,
+    freeze: Tuple[str, ...] = (),
     seed: int = 1,
     spacing: float = 3.0,  # 3 nm
-    freeze: Tuple[str, ...] = (),
     max_iter: int = 200,
-    dtype=jl.Float32,
+    dtype: str = "float32",
 ):
-    init = {} if init is None else dict(init)
-    init_nt = _dict_to_namedtuple(init)
+    init_params = _dict_to_namedtuple(dict(init_params or {}))
     freeze_syms = _normalize_freeze(freeze)
     res, losses, states, model, umodel = jl.LocMoFit.run_locmofit(
         model_name,
         locs,
         loc_precisions,
         max_iter=max_iter,
-        init=init_nt,
+        init_params=init_params,
         seed=seed,
         spacing=spacing,
         freeze=freeze_syms,
-        dtype=dtype,
+        dtype=normalize_dtype(dtype),
     )
-    return {"result": res, "losses": losses, "states": states}
+    return {"result": res, "losses": losses, "states": states, "model": model, "umodel": umodel}
