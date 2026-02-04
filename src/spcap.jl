@@ -2,7 +2,7 @@ struct SphericalCap <: Model end
 
 # SphericalCap(T::Type{<:AbstractFloat}=Float32; fixed::Tuple{Vararg{Symbol}}=()) = SphericalCap{T,fixed}()
 
-initialparameters(::SphericalCap, dtype::Type{<:AbstractFloat}) = ComponentArray(
+initialparameters(::SphericalCap, dtype::Type{<:AbstractFloat}) = (
     # apex=zeros(dtype, 3),
     x=convert(dtype, 0.0),
     y=convert(dtype, 0.0),

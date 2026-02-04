@@ -27,60 +27,74 @@ function run_locmofit(
     locs::AbstractMatrix{<:Real},
     loc_precisions::AbstractMatrix{<:Real};
     init_params::NamedTuple=NamedTuple(),
-    freeze::Tuple{Vararg{Symbol}}=Tuple{}(),
+    freeze=(),
     max_iter::Integer=200,
     spacing::Real=3.0,
     dtype::Type{<:AbstractFloat}=Float32,
     seed=1,
 )
-    rng = Random.default_rng()
-    Random.seed!(rng, seed)
+    @assert size(locs, 1) == 3 "locs must be (3,N), got $(size(locs))"
+    @assert size(loc_precisions) == size(locs) "loc_precisions must match locs shape; got $(size(loc_precisions)) vs $(size(locs))"
+
+    freeze_syms =
+        freeze isa Symbol ? (freeze,) :
+        freeze isa AbstractString ? (Symbol(freeze),) :
+        freeze isa Tuple ? freeze :
+        Tuple(freeze)
+
+    freeze_syms = map(Symbol, freeze_syms)
+
+    rng = Random.Xoshiro(seed)
 
     model = build_model(model_name)
-    ps = initialparameters(model, dtype)
+    ps = apply_init(initialparameters(model, dtype), init_params)
     st = Lux.initialstates(rng, model)
-    apply_init!(ps, init_params)
 
     umodel = unit_model(model, ps, spacing=spacing)
     umodel_copy = copy(umodel)
 
-    if isempty(freeze)
-        fmodel, ps, st = model, ps, st
+    fmodel, ps, st = if isempty(freeze_syms)
+        (model, ps, st)
     else
-        fmodel, ps, st = Lux.Experimental.freeze(model, ps, st, freeze)
-        ps = ComponentArray(ps)
+        Lux.Experimental.freeze(model, ps, st, freeze_syms)
     end
 
-    locs = convert(Array{dtype}, locs)
-    loc_precisions = convert(Array{dtype}, loc_precisions)
+    locsT = locs isa Array{dtype} ? locs : Array{dtype}(locs)
+    precT = loc_precisions isa Array{dtype} ? loc_precisions : Array{dtype}(loc_precisions)
 
     p = (
         model=fmodel,
         st=st,
-        data=locs,
-        half_precision=half_precision(loc_precisions, dtype=dtype),
-        log_const=log_norm_const(loc_precisions; dtype=dtype),
+        data=locsT,
+        half_precision=half_precision(precT),
+        log_const=log_norm_const(precT),
         unit_model=umodel
     )
 
-    losses = dtype[]
-    states = []
+    losses = Vector{dtype}()
+    states = ComponentArray{dtype}[]
 
     function callback(state, l)
         # state.objective is the current loss value
         if umodel != umodel_copy
             error("unit_model mutated at iter=$(state.iter)")
         end
-        push!(losses, state.objective)
+        push!(losses, dtype(l))
         push!(states, fullparams(state.u, st))
         return false   # return true to stop early if you want
     end
 
     opt_fun = OptimizationFunction(optloss, AutoEnzyme())
-    prob = OptimizationProblem(opt_fun, ps, p)
+    prob = OptimizationProblem(opt_fun, ComponentArray(ps), p)
     res = solve(prob, LBFGS(); callback, maxiters=max_iter)
 
-    return res, losses, states, model, umodel
+    return return (
+        result=res,
+        losses=losses,
+        states=states,
+        model=model,
+        unit_model=umodel,
+    )
 end
 
 end

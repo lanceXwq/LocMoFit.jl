@@ -56,14 +56,14 @@ function optloss(θ, p)
         p.half_precision, p.log_const)
 end
 
-function half_precision(stddev::AbstractArray; dtype::Type{<:AbstractFloat})
-    halfτ = similar(stddev, dtype)
+function half_precision(stddev::AbstractArray)
+    halfτ = similar(stddev)
     @. halfτ = stddev^-2 / 2
     return halfτ
 end
 
-function log_norm_const(stddev::AbstractArray; dtype::Type{<:AbstractFloat})
-    C = similar(stddev, dtype, 1, axes(stddev, 2))
+function log_norm_const(stddev::AbstractArray)
+    C = similar(stddev, 1, axes(stddev, 2))
     C .= -0.5 .* log.(prod(abs2, stddev, dims=1))
     return C
 end
