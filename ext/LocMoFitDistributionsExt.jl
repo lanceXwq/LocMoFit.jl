@@ -4,6 +4,8 @@ using LocMoFit
 using Random
 using Distributions
 
+# export simulate_localizations, simulate_localizations2
+
 function repeat_cols(A::AbstractMatrix, B::AbstractVector{<:Integer})
     m, n = size(A)
     out = similar(A, m, sum(B))
@@ -25,7 +27,7 @@ sample_nevents(rng::AbstractRNG, mean_events_per_dye::Real, npoints::Int) = rand
 
 sample_nphotons(rng::AbstractRNG, mean_photons_per_event::Real, nevents::AbstractVector{<:Integer}) = reduce(vcat, rand.(rng, Poisson(mean_photons_per_event), nevents))
 
-function generate_data(rng::AbstractRNG, pts::AbstractMatrix{<:Real}; psf_σ::Real, mean_photons_per_event::Real, mean_events_per_dye::Real, labeling_efficiency::Real, z_factor::Real=2.5)
+function LocMoFit.simulate_localizations(rng::AbstractRNG, pts::AbstractMatrix{<:Real}; psf_σ::Real, mean_photons_per_event::Real, mean_events_per_dye::Real, labeling_efficiency::Real, z_factor::Real=2.5)
     labeled_pts = sample_labeled_pts(rng, pts, labeling_efficiency)
     nevents = sample_nevents(rng, mean_events_per_dye, size(labeled_pts, 2))
     locs = repeat_cols(labeled_pts, nevents)
@@ -34,15 +36,14 @@ function generate_data(rng::AbstractRNG, pts::AbstractMatrix{<:Real}; psf_σ::Re
     mask = nphotons .> 0
     locs, nphotons = locs[:, mask], nphotons[mask]
 
-    loc_precs = psf_σ ./ nphotons'
-    spreads = randn!(rng, similar(locs)) .* loc_precs
-    size(locs, 1) == 3 && (spreads[3, :] .*= z_factor)
-
-    locs .+= spreads
+    ndims = size(locs, 1)
+    loc_precs = repeat(psf_σ ./ nphotons', ndims)
+    ndims == 3 && (loc_precs[3, :] .*= z_factor)
+    locs .+= randn!(rng, similar(locs)) .* loc_precs
     return locs, loc_precs
 end
 
-function generate_data2(rng::AbstractRNG, pts::AbstractMatrix{<:Real}; psf_σ::Real, mean_photons_per_event::Real, mean_events_per_dye::Real, labeling_efficiency::Real, z_factor::Real=2.5)
+function simulate_localizations2(rng::AbstractRNG, pts::AbstractMatrix{<:Real}; psf_σ::Real, mean_photons_per_event::Real, mean_events_per_dye::Real, labeling_efficiency::Real, z_factor::Real=2.5)
     ndims = size(pts, 1)
     locs = similar(pts, ndims, 0)
     loc_precs = similar(pts, ndims, 0)
