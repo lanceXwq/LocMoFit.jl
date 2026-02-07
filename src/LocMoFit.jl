@@ -3,7 +3,6 @@ module LocMoFit
 using Lux
 using NNlib: logsumexp
 using Random
-using Distances: SqMahalanobis, pairwise
 using Rotations: RotZ, AngleAxis, RotationVec
 using LinearAlgebra
 using ComponentArrays: ComponentArray, ComponentVector
@@ -13,12 +12,14 @@ using Optimization
 using OptimizationOptimJL
 
 include("models.jl")
-include("basic shapes.jl")
+# include("basic shapes.jl")
 include("spcap.jl")
+include("ring.jl")
 include("composite shapes.jl")
 include("unit models.jl")
 include("transformations.jl")
 include("loss.jl")
+include("simulation.jl")
 
 export Ring, SphericalCap, NuclearPoreComplex, luxloss, optloss, run_locmofit
 

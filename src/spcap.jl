@@ -1,7 +1,5 @@
 struct SphericalCap <: Model end
 
-# SphericalCap(T::Type{<:AbstractFloat}=Float32; fixed::Tuple{Vararg{Symbol}}=()) = SphericalCap{T,fixed}()
-
 initialparameters(::SphericalCap, dtype::Type{<:AbstractFloat}) = (
     # apex=zeros(dtype, 3),
     x=convert(dtype, 0.0),
@@ -12,16 +10,6 @@ initialparameters(::SphericalCap, dtype::Type{<:AbstractFloat}) = (
     θ=convert(dtype, 0.0),
     ϕ=convert(dtype, 0.0),
 )
-
-# initialparameters2(::SphericalCap, dtype::Type{<:AbstractFloat}) = ComponentArray(
-#     x=dtype[0.0],
-#     y=dtype[0.0],
-#     z=dtype[0.0],
-#     c=dtype[0.02], # 50 nm radius
-#     α=dtype[π/2],
-#     θ=dtype[0.0],
-#     ϕ=dtype[0.0],
-# )
 
 function unit_model(::SphericalCap, ps; spacing::Real)
     area = 4π / ps.c^2
