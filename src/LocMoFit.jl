@@ -12,14 +12,12 @@ using Optimization
 using OptimizationOptimJL
 
 include("models.jl")
-# include("basic shapes.jl")
 include("spcap.jl")
 include("ring.jl")
 include("composite shapes.jl")
 include("unit models.jl")
 include("transformations.jl")
 include("loss.jl")
-# include("simulation.jl")
 
 export Ring, SphericalCap, NuclearPoreComplex, luxloss, optloss, run_locmofit, simulate_localizations
 
@@ -98,7 +96,7 @@ function run_locmofit(
     )
 end
 
-function simulate_localizations(rng::AbstractRNG, pts::AbstractMatrix{<:Real}; psf_σ::Real, mean_photons_per_event::Real, mean_events_per_dye::Real, labeling_efficiency::Real, z_factor::Real=2.5)
+function simulate_localizations()
     error("Simulation functions are defined in LocMoFitDistributionsExt, please load Distributions first")
 end
 

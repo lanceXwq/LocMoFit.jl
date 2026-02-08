@@ -4,13 +4,12 @@ using LocMoFit
 using Random
 using Distributions
 
-# export simulate_localizations, simulate_localizations2
 
 function repeat_cols(A::AbstractMatrix, B::AbstractVector{<:Integer})
     m, n = size(A)
     out = similar(A, m, sum(B))
     k = 1
-    @inbounds for j in 1:n
+    @inbounds @views for j in 1:n
         bj = B[j]
         out[:, k:k+bj-1] .= A[:, j]
         k += bj
@@ -19,13 +18,13 @@ function repeat_cols(A::AbstractMatrix, B::AbstractVector{<:Integer})
 end
 
 function sample_labeled_pts(rng::AbstractRNG, pts::AbstractMatrix{<:Real}, labeling_efficiency::Real)
-    mask = rand(rng, Bernoulli(labeling_efficiency), size(pts, 2))
+    mask = rand(rng, size(pts, 2)) .< labeling_efficiency
     return pts[:, mask]
 end
 
 sample_nevents(rng::AbstractRNG, mean_events_per_dye::Real, npoints::Int) = rand(rng, Poisson(mean_events_per_dye), npoints)
 
-sample_nphotons(rng::AbstractRNG, mean_photons_per_event::Real, nevents::AbstractVector{<:Integer}) = reduce(vcat, rand.(rng, Poisson(mean_photons_per_event), nevents))
+sample_nphotons(rng::AbstractRNG, mean_photons_per_event::Real, nevents::AbstractVector{<:Integer}) = rand(rng, Poisson(mean_photons_per_event), sum(nevents))
 
 function LocMoFit.simulate_localizations(rng::AbstractRNG, pts::AbstractMatrix{<:Real}; psf_σ::Real, mean_photons_per_event::Real, mean_events_per_dye::Real, labeling_efficiency::Real, z_factor::Real=2.5)
     labeled_pts = sample_labeled_pts(rng, pts, labeling_efficiency)
@@ -37,7 +36,8 @@ function LocMoFit.simulate_localizations(rng::AbstractRNG, pts::AbstractMatrix{<
     locs, nphotons = locs[:, mask], nphotons[mask]
 
     ndims = size(locs, 1)
-    loc_precs = repeat(psf_σ ./ nphotons', ndims)
+    prec = psf_σ ./ nphotons
+    loc_precs = similar(locs, ndims, length(prec)) .= prec'
     ndims == 3 && (loc_precs[3, :] .*= z_factor)
     locs .+= randn!(rng, similar(locs)) .* loc_precs
     return locs, loc_precs
