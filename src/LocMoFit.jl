@@ -79,7 +79,7 @@ function run_locmofit(
             error("unit_model mutated at iter=$(state.iter)")
         end
         push!(losses, dtype(l))
-        push!(states, fullparams(state.u, st))
+        push!(states, copy(fullparams(state.u, st)))
         return false   # return true to stop early if you want
     end
 
@@ -96,7 +96,7 @@ function run_locmofit(
     )
 end
 
-function simulate_localizations()
+function simulate_localizations(rng, pts; psf_σ, mean_photons_per_event, mean_events_per_dye, labeling_efficiency, z_factor=2.5)
     error("Simulation functions are defined in LocMoFitDistributionsExt, please load Distributions first")
 end
 

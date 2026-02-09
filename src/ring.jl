@@ -9,11 +9,13 @@ initialparameters(::Ring, dtype::Type{<:AbstractFloat}) = (
     ϕ=convert(dtype, 0.0),
 )
 
-function unit_model(::Ring, ps; spacing::Real)
+function unit_model(::Ring, ps; spacing::AbstractFloat)
     circumference = 2π * ps.r
     npoints = ceil(Int, circumference / spacing)
     return unit_ring(eltype(ps[1]), npoints)
 end
+
+unit_model(::Ring, ps, npoints) = unit_ring(eltype(ps[1]), npoints)
 
 LuxCore.initialstates(::AbstractRNG, ::Ring) = NamedTuple()
 LuxCore.parameterlength(::Ring) = 6
