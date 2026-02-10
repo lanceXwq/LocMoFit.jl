@@ -6,7 +6,9 @@ function trans!(X::AbstractMatrix{T}, Δ::T; dims::Integer) where {T}
     return X
 end
 
-scale!(X::AbstractMatrix{T}, s::Union{AbstractVector{T},T}) where {T} = X .*= s
+scale!(X::AbstractMatrix{T}, s::T) where {T} = lmul!(s, X)
+
+scale!(X::AbstractMatrix{T}, s::AbstractVector{T}) where {T} = X .*= s
 
 function rotmat(θ::T, ϕ::T) where {T}
     sθ, cθ = sincos(θ)
@@ -82,9 +84,9 @@ rot_trans!(X::AbstractMatrix{T}, θ::AbstractVector{T}, ϕ::AbstractVector{T}, �
 # end
 
 function unit_sphere_to_cap(sphere_pts::AbstractMatrix{T}, half_angle::T) where {T}
-    x = sphere_pts[1, :]
-    y = sphere_pts[2, :]
-    z = sphere_pts[3, :]
+    x = view(sphere_pts, 1, :)
+    y = view(sphere_pts, 2, :)
+    z = view(sphere_pts, 3, :)
 
     ca = cos(half_angle)
     a = (1 + ca) / 2
@@ -103,9 +105,9 @@ function unit_sphere_to_cap(sphere_pts::AbstractMatrix{T}, half_angle::T) where 
 end
 
 function unit_sphere_to_cap(sphere_pts::AbstractMatrix{T}, half_angle::AbstractVector{T}) where {T}
-    x = sphere_pts[1, :]
-    y = sphere_pts[2, :]
-    z = sphere_pts[3, :]
+    x = view(sphere_pts, 1, :)
+    y = view(sphere_pts, 2, :)
+    z = view(sphere_pts, 3, :)
 
     ca = @. cos(half_angle)
     a = @. (1 + ca) / 2
@@ -117,7 +119,7 @@ function unit_sphere_to_cap(sphere_pts::AbstractMatrix{T}, half_angle::AbstractV
     r1 = sqrt.(x .^ 2 .+ y .^ 2)
     r2 = sqrt.(1 .- view(cap_pts, 3, :) .^ 2)
     s = r2 ./ r1
-
+    
     cap_pts[1, :] .= x .* s
     cap_pts[2, :] .= y .* s
     return cap_pts

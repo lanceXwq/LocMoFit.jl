@@ -24,7 +24,7 @@ LuxCore.statelength(::Ring) = 0
 function (::Ring)(unit_ring, ps, st)
     fullps = fullparams(ps, st)
     # X = unit_ring_to_arc(unit_ring)
-    X = unit_ring .* fullps.r
+    X = scale!(copy(unit_ring), fullps.r)
     # X[3, :] .-= r
     rot_trans!(X, fullps.θ, fullps.ϕ, fullps.x, fullps.y, fullps.z)
     # rot_trans!(X, fullps.θ, fullps.ϕ, fullps.apex)

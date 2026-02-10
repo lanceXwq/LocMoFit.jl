@@ -29,12 +29,16 @@ LuxCore.statelength(::NuclearPoreComplex) = 0
 
 function (::NuclearPoreComplex)(unit_npc, ps, st)
     fullps = fullparams(ps, st)
-    npts = map(u -> size(u, 2), unit_npc)
+    n1 = size(unit_npc[1], 2)
+    n2 = size(unit_npc[2], 2)
+    # ns = map(u -> size(u, 2), unit_npc)
     X = hcat(unit_npc...)
-    X .*= fullps.r1
-    X2 = view(X, :, npts[1] .+ (1:npts[2]))
-    X2 .*= fullps.r2
-    rot_trans!(X2, fullps.θ2, fullps.ϕ2, fullps.x2, fullps.y2, fullps.z2)
+    scale!(X, fullps.r1)
+    @views begin
+        X2 = X[:, n1+1:n1+n2]
+        scale!(X2, fullps.r2)
+        rot_trans!(X2, fullps.θ2, fullps.ϕ2, fullps.x2, fullps.y2, fullps.z2)
+    end
     rot_trans!(X, fullps.θ1, fullps.ϕ1, fullps.x1, fullps.y1, fullps.z1)
     return X, st
 end
