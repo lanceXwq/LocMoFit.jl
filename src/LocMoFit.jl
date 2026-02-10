@@ -14,7 +14,7 @@ using OptimizationOptimJL
 include("models.jl")
 include("spcap.jl")
 include("ring.jl")
-include("composite shapes.jl")
+include("npc.jl")
 include("unit models.jl")
 include("transformations.jl")
 include("loss.jl")
@@ -50,7 +50,7 @@ function run_locmofit(
     st = Lux.initialstates(rng, model)
 
     umodel = unit_model(model, ps, spacing=spacing)
-    umodel_copy = copy(umodel)
+    umodel_copy = umodel isa AbstractMatrix ? copy(umodel) : map(m->copy(m), umodel)
 
     fmodel, ps, st = if isempty(freeze_syms)
         (model, ps, st)
@@ -71,7 +71,7 @@ function run_locmofit(
     )
 
     losses = Vector{dtype}()
-    states = ComponentArray{dtype}[]
+    states = []
 
     function callback(state, l)
         # state.objective is the current loss value
@@ -79,7 +79,7 @@ function run_locmofit(
             error("unit_model mutated at iter=$(state.iter)")
         end
         push!(losses, dtype(l))
-        push!(states, copy(fullparams(state.u, st)))
+        push!(states, NamedTuple(fullparams(state.u, st)))
         return false   # return true to stop early if you want
     end
 

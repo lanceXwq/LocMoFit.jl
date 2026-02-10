@@ -15,7 +15,7 @@ function unit_model(::Ring, ps; spacing::Real)
     return unit_ring(eltype(ps[1]), npoints)
 end
 
-unit_model(::Ring, ps, npoints) = unit_ring(eltype(ps[1]), npoints)
+unit_model(::Ring, ps, npoints::Integer) = unit_ring(eltype(ps[1]), npoints)
 
 LuxCore.initialstates(::AbstractRNG, ::Ring) = NamedTuple()
 LuxCore.parameterlength(::Ring) = 6
