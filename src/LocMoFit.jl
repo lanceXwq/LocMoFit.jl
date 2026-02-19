@@ -6,6 +6,7 @@ using Random
 using Rotations: RotZ, AngleAxis, RotationVec
 using LinearAlgebra
 using ComponentArrays: ComponentArray, ComponentVector
+using Statistics: mean
 
 using Enzyme
 using Optimization

@@ -31,13 +31,13 @@ negative_log_likelihood(datapoints, modelpoints, half_τ, log_const) = negative_
 function negative_log_likelihood(datapoints::AbstractMatrix{T}, modelpoints::AbstractMatrix{T}, half_τ::T, log_const::T) where {T}
     Δx² = pairwise_sqdist(datapoints, modelpoints)
     per_pair_lls = muladd.(Δx², -half_τ, log_const)
-    logsumexp(per_pair_lls; dims=1) |> sum |> (x -> -x) # may need a vec() in the future
+    -mean(logsumexp(per_pair_lls; dims=1)) # may need a vec() in the future
 end
 
 function negative_log_likelihood(datapoints::AbstractMatrix{T}, modelpoints::AbstractMatrix{T}, half_τ::AbstractMatrix{T}, log_const::AbstractMatrix{T}) where {T}
     Δx² = pairwise_sqdist(datapoints, modelpoints, half_τ)
     per_pair_lls = log_const .- Δx²
-    logsumexp(per_pair_lls; dims=1) |> sum |> (x -> -x) # may need a vec() in the future
+    -mean(logsumexp(per_pair_lls; dims=1)) # may need a vec() in the future
 end
 
 function luxloss(model, ps, st, data)
