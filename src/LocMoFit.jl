@@ -51,7 +51,7 @@ function run_locmofit(
     st = Lux.initialstates(rng, model)
 
     umodel = unit_model(model, ps, spacing=spacing)
-    umodel_copy = umodel isa AbstractMatrix ? copy(umodel) : map(m->copy(m), umodel)
+    umodel_copy = umodel isa AbstractMatrix ? copy(umodel) : map(m -> copy(m), umodel)
 
     fmodel, ps, st = if isempty(freeze_syms)
         (model, ps, st)
@@ -65,9 +65,7 @@ function run_locmofit(
     p = (
         model=fmodel,
         st=st,
-        data=locsT,
-        half_precision=half_precision(precT),
-        log_const=log_norm_const(precT),
+        data=(locsT, precT),
         unit_model=umodel
     )
 

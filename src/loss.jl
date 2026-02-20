@@ -19,26 +19,31 @@ function pairwise_sqdist(X::AbstractMatrix{T}, Y::AbstractMatrix{T}) where {T}
     Y²' .+ X² .- 2 .* (Y' * X)
 end
 
-function pairwise_sqdist(X::AbstractMatrix{T},
-    Y::AbstractMatrix{T},
-    invΣ::AbstractMatrix{T}) where {T}
+function pairwise_sqdist(X::AbstractMatrix{T}, Y::AbstractMatrix{T}, invΣ::AbstractMatrix{T}) where {T}
     D² = muladd((Y .^ 2)', invΣ, sum(invΣ .* X .^ 2; dims=1))
     mul!(D², Y', invΣ .* X, -T(2), one(T))
 end
 
 negative_log_likelihood(datapoints, modelpoints, half_τ, log_const) = negative_log_likelihood(datapoints, hcat(modelpoints...), half_τ, log_const)
 
-function negative_log_likelihood(datapoints::AbstractMatrix{T}, modelpoints::AbstractMatrix{T}, half_τ::T, log_const::T) where {T}
-    Δx² = pairwise_sqdist(datapoints, modelpoints)
+function negative_log_likelihood(locs::AbstractMatrix{T}, modelpoints::AbstractMatrix{T}, half_τ::T, log_const::T) where {T}
+    Δx² = pairwise_sqdist(locs, modelpoints)
     per_pair_lls = muladd.(Δx², -half_τ, log_const)
     -mean(logsumexp(per_pair_lls; dims=1)) # may need a vec() in the future
 end
 
-function negative_log_likelihood(datapoints::AbstractMatrix{T}, modelpoints::AbstractMatrix{T}, half_τ::AbstractMatrix{T}, log_const::AbstractMatrix{T}) where {T}
-    Δx² = pairwise_sqdist(datapoints, modelpoints, half_τ)
+function negative_log_likelihood(locs::AbstractMatrix{T}, modelpoints::AbstractMatrix{T}, half_τ::AbstractMatrix{T}, log_const::AbstractMatrix{T}) where {T}
+    Δx² = pairwise_sqdist(locs, modelpoints, half_τ)
     per_pair_lls = log_const .- Δx²
     -mean(logsumexp(per_pair_lls; dims=1)) # may need a vec() in the future
 end
+
+# function negative_log_likelihood(locs::AbstractMatrix{T}, modelpoints::AbstractMatrix{T}, precs::AbstractMatrix{T}) where {T}
+#     half_τ, log_const
+#     Δx² = pairwise_sqdist(locs, modelpoints, half_τ)
+#     per_pair_lls = log_const .- Δx²
+#     -mean(logsumexp(per_pair_lls; dims=1)) # may need a vec() in the future
+# end
 
 function luxloss(model, ps, st, data)
     positions, st = model(data.in, ps, st)
@@ -50,20 +55,17 @@ function optloss(θ, p)
     # `p` is whatever you pass into OptimizationProblem
     model = p.model
     st = p.st
-    datapoints = p.data
+    locs, precs = p.data
+
+    fullps = fullparams(θ, st)
+    half_prec, log_const = get_norm_const(precs, fullps.σ)
+
     modelpoints, _ = model(p.unit_model, θ, st)
-    return negative_log_likelihood(datapoints, modelpoints,
-        p.half_precision, p.log_const)
+    return negative_log_likelihood(locs, modelpoints, half_prec, log_const)
 end
 
-function half_precision(stddev::AbstractArray)
-    halfτ = similar(stddev)
-    @. halfτ = stddev^-2 / 2
-    return halfτ
-end
-
-function log_norm_const(stddev::AbstractArray)
-    C = similar(stddev, 1, axes(stddev, 2))
-    C .= -0.5 .* log.(prod(abs2, stddev, dims=1))
-    return C
+function get_norm_const(std, blur=0)
+    half_prec = (std .+ blur) .^ -2 ./ 2
+    log_const = log.(prod(half_prec, dims=1) .* 8) ./ 2
+    return half_prec, log_const
 end

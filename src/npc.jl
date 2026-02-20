@@ -13,6 +13,7 @@ initialparameters(::NuclearPoreComplex, dtype::Type{<:AbstractFloat}) = (
     r2=convert(dtype, 1), # multiplicative factor relative to r1
     θ2=convert(dtype, 0.0), # orientation relative to ring 1
     ϕ2=convert(dtype, 0.0),
+    σ=convert(dtype, 0.0),
 )
 
 function unit_model(::NuclearPoreComplex, ps; spacing::Real)
@@ -24,7 +25,7 @@ end
 unit_model(::NuclearPoreComplex, ps, pts_per_ring::Tuple{<:Integer,<:Integer}) = map(pts -> unit_ring(eltype(ps[1]), pts), pts_per_ring)
 
 LuxCore.initialstates(::AbstractRNG, ::NuclearPoreComplex) = NamedTuple()
-LuxCore.parameterlength(::NuclearPoreComplex) = 12
+LuxCore.parameterlength(::NuclearPoreComplex) = 13
 LuxCore.statelength(::NuclearPoreComplex) = 0
 
 function (::NuclearPoreComplex)(unit_npc, ps, st)

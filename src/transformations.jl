@@ -84,53 +84,48 @@ rot_trans!(X::AbstractMatrix{T}, θ::AbstractVector{T}, ϕ::AbstractVector{T}, �
 # end
 
 function unit_sphere_to_cap(sphere_pts::AbstractMatrix{T}, half_angle::T) where {T}
-    x = view(sphere_pts, 1, :)
-    y = view(sphere_pts, 2, :)
-    z = view(sphere_pts, 3, :)
-
     ca = cos(half_angle)
     a = (1 + ca) / 2
     b = (1 - ca) / 2
 
-    cap_pts = similar(sphere_pts)
-    cap_pts[3, :] .= muladd.(b, z, a)
+    cap_pts = copy(sphere_pts)
+    cap_pts[3, :] .= muladd.(b, view(cap_pts, 3, :), a)
 
-    r1 = sqrt.(x .^ 2 .+ y .^ 2)
+    r1 = @views sqrt.(cap_pts[1, :] .^ 2 .+ cap_pts[2, :] .^ 2)
     r2 = sqrt.(1 .- view(cap_pts, 3, :) .^ 2)
     s = r2 ./ r1
 
-    cap_pts[1, :] .= x .* s
-    cap_pts[2, :] .= y .* s
+    @views cap_pts[1:2, :] .*= s'
     return cap_pts
 end
 
-function unit_sphere_to_cap(sphere_pts::AbstractMatrix{T}, half_angle::AbstractVector{T}) where {T}
-    x = view(sphere_pts, 1, :)
-    y = view(sphere_pts, 2, :)
-    z = view(sphere_pts, 3, :)
+# function unit_sphere_to_cap(sphere_pts::AbstractMatrix{T}, half_angle::AbstractVector{T}) where {T}
+#     x = sphere_pts[1, :]
+#     y = sphere_pts[2, :]
+#     z = sphere_pts[3, :]
 
-    ca = @. cos(half_angle)
-    a = @. (1 + ca) / 2
-    b = @. (1 - ca) / 2
+#     ca = @. cos(half_angle)
+#     a = @. (1 + ca) / 2
+#     b = @. (1 - ca) / 2
 
-    cap_pts = similar(sphere_pts)
-    cap_pts[3, :] .= muladd.(b, z, a)
+#     cap_pts = similar(sphere_pts)
+#     cap_pts[3, :] .= muladd.(b, z, a)
 
-    r1 = sqrt.(x .^ 2 .+ y .^ 2)
-    r2 = sqrt.(1 .- view(cap_pts, 3, :) .^ 2)
-    s = r2 ./ r1
-    
-    cap_pts[1, :] .= x .* s
-    cap_pts[2, :] .= y .* s
-    return cap_pts
-end
+#     r1 = sqrt.(x .^ 2 .+ y .^ 2)
+#     r2 = sqrt.(1 .- view(cap_pts, 3, :) .^ 2)
+#     s = r2 ./ r1
 
-function unit_ring_to_arc(ring_pts::AbstractMatrix{T}, half_angle::T) where {T}
-    iseven(size(ring_pts, 2)) || (@warn "Even number of points for unit_ring_to_arc is risky" maxlog = 2)
-    φ = asin.(view(ring_pts, 1, :)) .* (half_angle / π)
-    arc_pts = similar(ring_pts)
-    arc_pts[1, :] .= sin.(φ)
-    arc_pts[2, :] .= cos.(φ)
-    arc_pts[3, :] .= 0
-    return arc_pts
-end
+#     cap_pts[1, :] .= x .* s
+#     cap_pts[2, :] .= y .* s
+#     return cap_pts
+# end
+
+# function unit_ring_to_arc(ring_pts::AbstractMatrix{T}, half_angle::T) where {T}
+#     iseven(size(ring_pts, 2)) || (@warn "Even number of points for unit_ring_to_arc is risky" maxlog = 2)
+#     φ = asin.(view(ring_pts, 1, :)) .* (half_angle / π)
+#     arc_pts = similar(ring_pts)
+#     arc_pts[1, :] .= sin.(φ)
+#     arc_pts[2, :] .= cos.(φ)
+#     arc_pts[3, :] .= 0
+#     return arc_pts
+# end

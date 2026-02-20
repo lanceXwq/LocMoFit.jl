@@ -9,6 +9,7 @@ initialparameters(::SphericalCap, dtype::Type{<:AbstractFloat}) = (
     α=convert(dtype, π / 2),
     θ=convert(dtype, 0.0),
     ϕ=convert(dtype, 0.0),
+    σ=convert(dtype, 0.0),
 )
 
 function unit_model(::SphericalCap, ps; spacing::Real)
@@ -18,7 +19,7 @@ function unit_model(::SphericalCap, ps; spacing::Real)
 end
 
 LuxCore.initialstates(::AbstractRNG, ::SphericalCap) = NamedTuple()
-LuxCore.parameterlength(::SphericalCap) = 7
+LuxCore.parameterlength(::SphericalCap) = 8
 LuxCore.statelength(::SphericalCap) = 0
 
 function (::SphericalCap)(unit_sphere, ps, st)
