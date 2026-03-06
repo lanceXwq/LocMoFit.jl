@@ -43,3 +43,12 @@ function (::NuclearPoreComplex)(unit_npc, ps, st)
     rot_trans!(X, fullps.θ1, fullps.ϕ1, fullps.x1, fullps.y1, fullps.z1)
     return X, st
 end
+
+function penalty(::NuclearPoreComplex, ps, st)
+    fullps = fullparams(ps, st)
+    penalty_c1 = sq_hinge(1 / fullps.r1^2 - 1)
+    penalty_c2 = sq_hinge(1 / fullps.r2^2 - 1)
+    penalty_θ1 = sq_hinge(fullps.θ1 - π) + sq_hinge(-fullps.θ1)
+    penalty_θ2 = sq_hinge(fullps.θ2 - π) + sq_hinge(-fullps.θ2)
+    return penalty_c1 + penalty_c2 + penalty_θ1 + penalty_θ2
+end

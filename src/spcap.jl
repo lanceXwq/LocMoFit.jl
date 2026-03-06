@@ -32,3 +32,11 @@ function (::SphericalCap)(unit_sphere, ps, st)
     # rot_trans!(X, fullps.θ, fullps.ϕ, fullps.apex)
     return X, st
 end
+
+function penalty(::SphericalCap, ps, st)
+    fullps = fullparams(ps, st)
+    penalty_c = sq_hinge(fullps.c^2 - 1)
+    penalty_α = sq_hinge(fullps.α - π) + sq_hinge(-fullps.α)
+    penalty_θ = sq_hinge(fullps.θ - π) + sq_hinge(-fullps.θ)
+    return penalty_c + penalty_α + penalty_θ
+end

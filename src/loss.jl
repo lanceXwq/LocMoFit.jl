@@ -61,7 +61,7 @@ function optloss(θ, p)
     half_prec, log_const = get_norm_const(precs, fullps.σ)
 
     modelpoints, _ = model(p.unit_model, θ, st)
-    return negative_log_likelihood(locs, modelpoints, half_prec, log_const)
+    return negative_log_likelihood(locs, modelpoints, half_prec, log_const) + penalty(model, θ, st)
 end
 
 function get_norm_const(std, blur=0)
@@ -69,3 +69,5 @@ function get_norm_const(std, blur=0)
     log_const = log.(prod(half_prec, dims=1) .* 8) ./ 2
     return half_prec, log_const
 end
+
+sq_hinge(x) = max(0, x)^2
