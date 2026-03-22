@@ -15,12 +15,13 @@ using OptimizationOptimJL
 include("models.jl")
 include("spcap.jl")
 include("ring.jl")
-include("npc.jl")
+include("double_ring.jl")
+include("spcap_ring.jl")
 include("unit models.jl")
 include("transformations.jl")
 include("loss.jl")
 
-export Ring, SphericalCap, NuclearPoreComplex, luxloss, optloss, run_locmofit, simulate_localizations
+export Ring, SphericalCap, DoubleRing, SpCapRing, luxloss, optloss, run_locmofit, simulate_localizations
 
 function run_locmofit(
     model_name::String,

@@ -8,7 +8,7 @@ using Distributions
 rng = Random.default_rng()
 Random.seed!(rng, 1)
 
-model = NuclearPoreComplex()
+model = DoubleRing()
 dtype = Float64
 
 ps = (
