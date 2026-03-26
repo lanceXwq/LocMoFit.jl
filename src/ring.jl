@@ -32,7 +32,7 @@ function (::Ring)(unit_ring, ps, st)
     return X, st
 end
 
-function penalty(::Ring, ps, st)
+function penalty(::Union{T,Lux.Experimental.FrozenLayer{<:Any,T}}, ps, st) where {T<:Ring}
     fullps = fullparams(ps, st)
     penalty_c = sq_hinge(1 / fullps.r^2 - 1)
     penalty_θ = sq_hinge(fullps.θ - π) + sq_hinge(-fullps.θ)

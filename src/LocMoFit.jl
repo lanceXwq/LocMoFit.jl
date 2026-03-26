@@ -34,7 +34,7 @@ function run_locmofit(
     dtype::Type{<:AbstractFloat}=Float32,
     seed=1,
 )
-    @assert size(locs, 1) == 3 "locs must be (3,N), got $(size(locs))"
+    # @assert size(locs, 1) == 3 "locs must be (3,N), got $(size(locs))"
     @assert size(loc_precisions) == size(locs) "loc_precisions must match locs shape; got $(size(loc_precisions)) vs $(size(locs))"
 
     freeze_syms =

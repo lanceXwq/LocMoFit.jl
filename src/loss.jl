@@ -61,7 +61,14 @@ function optloss(θ, p)
     half_prec, log_const = get_norm_const(precs, fullps.σ)
 
     modelpoints, _ = model(p.unit_model, θ, st)
-    return negative_log_likelihood(locs, modelpoints, half_prec, log_const) + penalty(model, θ, st)
+    dims_data = size(locs, 1)
+    dims_model = size(modelpoints, 1)
+    nll = if dims_data != dims_model
+        negative_log_likelihood(locs, view(modelpoints, 1:dims_data, :), half_prec, log_const)
+    else
+        negative_log_likelihood(locs, modelpoints, half_prec, log_const)
+    end
+    return nll + penalty(model, θ, st)
 end
 
 function get_norm_const(std, blur=0)
