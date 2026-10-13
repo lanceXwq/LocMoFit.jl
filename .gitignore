@@ -1,10 +1,14 @@
 /Manifest*.toml
 .vscode
 .DS_Store
+.CondaPkg/
+__pycache__/
 *.mp4
-*.csv
-*.md
+# Scratch at the repo root only; tutorial data and helpers under examples/ are committed
+/*.csv
+/TODO.md
+/plotting*
+/simulation*.jl
+/scratch.jl
+# Scripts that run on experiment data (kept in ../data, outside any repo)
 *_video_*
-plotting*
-simulation*.jl
-scratch.jl
