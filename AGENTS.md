@@ -15,7 +15,7 @@ julia --project=. -e 'using LocMoFit'            # quick load check
 
 On Apple Silicon, precompilation prints `CpuId` errors ("does not provide information on cpuid leaf 0x00000004"). They come from a dependency and do not stop LocMoFit from loading.
 
-The examples need `CSV`, `DataFrames`, `GLMakie` and `Distributions`, which are not in any project here; they assume the owner's global environment and are run from the repo root (relative CSV paths).
+The examples need `CSV`, `DataFrames` and `GLMakie`, which are not in any project here; they assume the owner's global environment and are run from the repo root (relative CSV paths).
 
 CI and `[compat]` target Julia 1.13 only (see Compatibility in `../AGENTS.md`); do not add code paths for older versions.
 
@@ -29,13 +29,12 @@ CI and `[compat]` target Julia 1.13 only (see Compatibility in `../AGENTS.md`); 
 | `src/unit models.jl` | `unit_ring`, `unit_sphere` (Fibonacci), `unit_disk` — note the space in the filename |
 | `src/transformations.jl` | `rotmat(θ, ϕ)`, `rot_trans!`, `scale!`, `unit_sphere_to_cap` |
 | `src/loss.jl` | `pairwise_sqdist`, `get_neg_exponents`, `negative_log_likelihood`, `optloss`, `get_norm_const`, `sq_hinge` |
-| `ext/LocMoFitDistributionsExt.jl` | `simulate_localizations` (loaded with `using Distributions`). Predates SimSMLM. |
-| `examples/simulation/`, `examples/fit/`, `examples/plotting/` | Simulate → CSV, fit CSV → MP4 of the fitting process. Tutorial data belong under `examples/` and are committed. `examples/fit/spcap_video_ROI4.jl` runs on experiment data and is gitignored; it still reads the CSV from the repo root, but the file is now in `../data/`. |
+| `examples/fit/`, `examples/plotting/` | Fit a CSV → MP4 of the fitting process. Tutorial data belong under `examples/` and are committed. The scripts that simulated them were removed with LocMoFit's own simulator (2026-10-15); regenerate the data with SimSMLM, keeping the generating script next to it. `examples/fit/spcap_video_ROI4.jl` runs on experiment data and is gitignored; it still reads the CSV from the repo root, but the file is now in `../data/`. |
 | `jlbridge.py` | Python wrapper (juliacall) so MATLAB/Python can call `run_locmofit` |
 | `scripts/run_from_matlab.jl` | JSON-over-stdin entry point. **Stale**: calls `LocMoFit.fit_model`, which no longer exists. Untracked. |
 | `old/` | Superseded code, untracked. Reference only. |
 | Root `simulated_data_*.csv`, `ground_truth_*.csv` | Inputs/outputs of the examples. As tutorial data they belong under `examples/`; they are still at the root and gitignored. |
-| Root `*.mp4`, `simulation *.jl`, `scratch.jl`, `fit_with_video_npc.jl` | Owner's scratch (mostly gitignored). Do not edit, include, or test them. |
+| Root `*.mp4`, `scratch.jl`, `fit_with_video_npc.jl` | Owner's scratch (mostly gitignored). Do not edit, include, or test them. |
 
 ## How a fit works
 
