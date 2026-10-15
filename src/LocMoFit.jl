@@ -21,7 +21,7 @@ include("unit models.jl")
 include("transformations.jl")
 include("loss.jl")
 
-export Ring, SphericalCap, DoubleRing, SpCapRing, luxloss, optloss, run_locmofit, simulate_localizations
+export Ring, SphericalCap, DoubleRing, SpCapRing, luxloss, optloss, run_locmofit
 
 function run_locmofit(
     model_name::String,
@@ -94,10 +94,6 @@ function run_locmofit(
         model=model,
         unit_model=umodel,
     )
-end
-
-function simulate_localizations(rng, pts; psf_σ, mean_photons_per_event, mean_events_per_dye, labeling_efficiency, z_factor=2.5)
-    error("Simulation functions are defined in LocMoFitDistributionsExt, please load Distributions first")
 end
 
 end
