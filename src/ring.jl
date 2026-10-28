@@ -1,40 +1,20 @@
-struct Ring <: Model end
+"""
+    Ring()
 
-initialparameters(::Ring, dtype::Type{<:AbstractFloat}) = (
-    x=convert(dtype, 0.0),
-    y=convert(dtype, 0.0),
-    z=convert(dtype, 0.0),
-    r=convert(dtype, 50), # 50 nm radius
-    θ=convert(dtype, 0.0),
-    ϕ=convert(dtype, 0.0),
-    σ=convert(dtype, 0.0),
-)
+A circle of radius `r` (nm), centered at its position `(x, y, z)`, in the plane normal to its axis.
+"""
+struct Ring <: SimpleModel end
 
-function unit_model(::Ring, ps; spacing::Real)
-    circumference = 2π * ps.r
+shape_parameters(::Ring, dtype::Type{<:AbstractFloat}) = (r=convert(dtype, 50),) # 50 nm radius
+
+function unit_points(::Ring, shape; spacing::Real)
+    circumference = 2π * shape.r
     npoints = ceil(Int, circumference / spacing)
-    return unit_ring(eltype(ps[1]), npoints)
+    return unit_ring(typeof(shape.r), npoints)
 end
 
-unit_model(::Ring, ps, npoints::Integer) = unit_ring(eltype(ps[1]), npoints)
+local_points(::Ring, unit_ring, shape) = shape.r .* unit_ring
 
-LuxCore.initialstates(::AbstractRNG, ::Ring) = NamedTuple()
-LuxCore.parameterlength(::Ring) = 7
-LuxCore.statelength(::Ring) = 0
+shape_penalty(::Ring, shape) = sq_hinge(1 / shape.r^2 - 1)
 
-function (::Ring)(unit_ring, ps, st)
-    fullps = fullparams(ps, st)
-    # X = unit_ring_to_arc(unit_ring)
-    X = scale!(copy(unit_ring), fullps.r)
-    # X[3, :] .-= r
-    rot_trans!(X, fullps.θ, fullps.ϕ, fullps.x, fullps.y, fullps.z)
-    # rot_trans!(X, fullps.θ, fullps.ϕ, fullps.apex)
-    return X, st
-end
-
-function penalty(::Union{T,Lux.Experimental.FrozenLayer{<:Any,T}}, ps, st) where {T<:Ring}
-    fullps = fullparams(ps, st)
-    penalty_c = sq_hinge(1 / fullps.r^2 - 1)
-    penalty_θ = sq_hinge(fullps.θ - π) + sq_hinge(-fullps.θ)
-    return penalty_c + penalty_θ
-end
+shape_summary(::Ring, shape) = (r=shape.r,)

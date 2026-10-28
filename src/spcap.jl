@@ -1,42 +1,43 @@
-struct SphericalCap <: Model end
+"""
+    SphericalCap()
 
-initialparameters(::SphericalCap, dtype::Type{<:AbstractFloat}) = (
-    # apex=zeros(dtype, 3),
-    x=convert(dtype, 0.0),
-    y=convert(dtype, 0.0),
-    z=convert(dtype, 0.0),
-    c=convert(dtype, 0.02), # 50 nm radius
-    α=convert(dtype, π / 2),
-    θ=convert(dtype, 0.0),
-    ϕ=convert(dtype, 0.0),
-    σ=convert(dtype, 0.0),
-)
+A spherical cap of constant area 4πs², with its apex at its position `(x, y, z)` and its outward normal along its axis. Its dimensionless curvature is κ′ = tanh(`eta`) = curvature × `s`: 0 is a flat disc of radius 2s, ±1 the whole sphere of radius s, and a negative κ′ bends the other way. The sphere's radius is s/κ′ and the half-angle from the axis to the rim, seen from the sphere's center, is acos(1 − 2κ′²) (derivations/derivation.qmd). This is SimSMLM's `Bend`, and the cap MATLAB LocMoFit parametrizes by its surface area and close angle.
+"""
+struct SphericalCap <: SimpleModel end
 
-function unit_model(::SphericalCap, ps; spacing::Real)
-    area = 4π / ps.c^2
+function shape_parameters(::SphericalCap, dtype::Type{<:AbstractFloat})
+    return (
+        s=convert(dtype, 50), # area 4π·50² nm²
+        eta=convert(dtype, 0.5), # κ′ = tanh(0.5) ≈ 0.46
+    )
+end
+
+# equal-area points on the unit sphere, as many as the cap's area holds at the spacing
+function unit_points(::SphericalCap, shape; spacing::Real)
+    area = 4π * shape.s^2
     npoints = ceil(Int, area / spacing^2)
-    return unit_sphere(eltype(ps[1]), npoints)
+    return unit_cap(typeof(shape.s), npoints)
 end
 
-LuxCore.initialstates(::AbstractRNG, ::SphericalCap) = NamedTuple()
-LuxCore.parameterlength(::SphericalCap) = 8
-LuxCore.statelength(::SphericalCap) = 0
-
-function (::SphericalCap)(unit_sphere, ps, st)
-    fullps = fullparams(ps, st)
-    X = unit_sphere_to_cap(unit_sphere, fullps.α)
-    r = 1 / fullps.c
-    scale!(X, r)
-    X[3, :] .-= r
-    rot_trans!(X, fullps.θ, fullps.ϕ, fullps.x, fullps.y, fullps.z)
-    # rot_trans!(X, fullps.θ, fullps.ϕ, fullps.apex)
-    return X, st
+# the unit sphere's point at depth h below its north pole goes to depth s·κ′·h below the apex, at distance s·√(h(2 − κ′²h)) from the axis; each point keeps the area above it, so equal-area points stay equal-area
+function local_points(::SphericalCap, unit_cap, shape)
+    κ = tanh(shape.eta)
+    h = view(unit_cap, 3:3, :)
+    # one fused broadcast over the 3×M points (rows 1–2 the distance from the axis times ρ̂, row 3 the depth), so that only the result is allocated: this halves what a gradient allocates
+    return shape.s .* ifelse.((1:3) .== 3, -κ .* h, sqrt.(h .* (2 .- κ^2 .* h)) .* unit_cap)
 end
 
-function penalty(::SphericalCap, ps, st)
-    fullps = fullparams(ps, st)
-    penalty_c = sq_hinge(fullps.c^2 - 1)
-    penalty_α = sq_hinge(fullps.α - π) + sq_hinge(-fullps.α)
-    penalty_θ = sq_hinge(fullps.θ - π) + sq_hinge(-fullps.θ)
-    return penalty_c + penalty_α + penalty_θ
+shape_penalty(::SphericalCap, shape) = sq_hinge(1 / shape.s^2 - 1)
+
+# the cap's size and shape in the usual terms
+function shape_summary(::SphericalCap, shape)
+    κ = tanh(shape.eta)
+    return (
+        s=shape.s,
+        kappa=κ,
+        curvature=κ / shape.s,
+        radius=shape.s / κ,
+        alpha=acos(1 - 2κ^2),
+        area=4π * shape.s^2,
+    )
 end

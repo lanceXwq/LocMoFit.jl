@@ -1,0 +1,13 @@
+# benchmarks/speed/speed.jl on the fitter before step 5 (2026-10-27): the loss as M×N broadcasts (log_gaussians, log_signal) differentiated by Enzyme, OptimizationFunction(loss, AutoEnzyme()). Apple M1 Pro (8 performance, 2 efficiency cores), julia -t 8, Julia 1.13.3; run from a snapshot of the package. Columns: localizations N, model points M, a value and an Enzyme gradient (ms, and ns per localization–point pair), a complete fit from the moved start (s, best of 3), BFGS iterations, value and gradient evaluations.
+
+case         dtype        N      M   value ms    grad ms  v ns/NM  g ns/NM     fit s  iter     f     g
+ring         Float64    102    121      0.089      0.322     7.21    26.09    0.0194    41    43    42  Success
+ring         Float32    102    121     0.0808      0.307     6.54    24.84    0.0378    39    50    40  Success
+ring2D       Float64    102    121     0.0798      0.285     6.47    23.09    0.0437    53    61    54  Success
+ring2D       Float32    102    121     0.0731      0.271     5.92    21.98    0.0225    53    61    54  Success
+double_ring  Float64    187    242      0.323       1.17     7.13    25.96     0.144    84    87    85  Success
+double_ring  Float32    187    242      0.296       1.11     6.54    24.61     0.137    86   106    87  Success
+spcap        Float64    290   6648       12.8       48.2     6.63    24.99      3.43    48    55    49  Success
+spcap        Float32    290   6648       10.9       46.8     5.68    24.28      4.42    56   117    57  Success
+spcap_ring   Float64    330   1276       2.75       10.7     6.54    25.31      1.43    92    96    93  Success
+spcap_ring   Float32    330   1276       2.93         11     6.95    26.04      1.35    85   120    86  Success

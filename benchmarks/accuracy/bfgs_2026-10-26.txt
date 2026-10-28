@@ -1,0 +1,323 @@
+# Accuracy benchmark (fit.jl) on the fitter of 2026-10-26, step 3: as likelihood_lbfgs_2026-10-26.txt but with BFGS
+# (backtracking line search, gradient tolerance 1e-4); still the (θ, ϕ) orientation and the cap by (c, α), its point
+# count from its full sphere. 20 sites per group, one process per group (run from a snapshot of the package).
+
+ring — no background, start at the truth, Float64: 20 sites, 20 converged, median 35 iterations, median 46 ms per fit
+  error                  bias    scatter       z
+  center.x             -0.248     0.8645    -1.3
+  center.y             0.1762     0.6158     1.3
+  center.z             0.6945      1.352     2.3
+  r                   -0.1621     0.7228    -1.0
+  axis (°)               2.93      1.494     8.8
+  σ                         0          0     NaN
+  signal fraction      -0.151   0.004482  -150.7  ← bias
+
+ring — no background, start at the moved, Float64: 20 sites, 20 converged, median 42 iterations, median 41 ms per fit
+  error                  bias    scatter       z
+  center.x            -0.2377     0.8661    -1.2
+  center.y             0.1836     0.6143     1.3
+  center.z              0.692      1.352     2.3
+  r                   -0.1736     0.7513    -1.0
+  axis (°)              2.929      1.483     8.8
+  σ                     0.316     0.8431     1.7
+  signal fraction     -0.1509   0.004442  -152.0  ← bias
+
+ring — background, start at the truth, Float64: 20 sites, 20 converged, median 33 iterations, median 63 ms per fit
+  error                  bias    scatter       z
+  center.x             0.2308      1.258     0.8
+  center.y            0.07984      1.049     0.3
+  center.z            -0.3623      1.342    -1.2
+  r                  -0.04894     0.5578    -0.4
+  axis (°)              3.123      1.824     7.7
+  σ                         0          0     NaN
+  signal fraction    -0.03281    0.02506    -5.9  ← bias
+
+ring — background, start at the moved, Float64: 20 sites, 20 converged, median 44 iterations, median 41 ms per fit
+  error                  bias    scatter       z
+  center.x             0.2335      1.256     0.8
+  center.y            0.08509      1.054     0.4
+  center.z            -0.3548      1.351    -1.2
+  r                  -0.07377      0.564    -0.6
+  axis (°)               3.27      2.304     6.3
+  σ                     0.408     0.9452     1.9
+  signal fraction    -0.03273    0.02504    -5.8  ← bias
+
+ring — background, start at the moved, Float32: 20 sites, 20 converged, median 44 iterations, median 54 ms per fit
+  error                  bias    scatter       z
+  center.x             0.2318      1.258     0.8
+  center.y            0.07987      1.052     0.3
+  center.z              -0.35       1.35    -1.2
+  r                  -0.07213     0.5662    -0.6
+  axis (°)              3.269      2.304     6.3
+  σ                    0.4123      0.958     1.9
+  signal fraction    -0.03273    0.02504    -5.8  ← bias
+
+ring2D — no background, start at the truth, Float64: 20 sites, 20 converged, median 29 iterations, median 43 ms per fit
+  error                  bias    scatter       z
+  center.x            -0.3181     0.8453    -1.7
+  center.y             0.1873     0.6485     1.3
+  center.z                  0          0     NaN
+  r                    0.1179      1.001     0.5
+  axis (°)              9.354      5.261     8.0
+  σ                         0          0     NaN
+  signal fraction     -0.1526   0.004209  -162.1  ← bias
+
+ring2D — no background, start at the moved, Float64: 20 sites, 20 converged, median 43 iterations, median 62 ms per fit
+  error                  bias    scatter       z
+  center.x            -0.3227     0.8666    -1.7
+  center.y             0.1791     0.6607     1.2
+  center.z                  0          0     NaN
+  r                    0.0562      1.062     0.2
+  axis (°)              10.18      5.617     8.1
+  σ                   0.09995     0.4989     0.9
+  signal fraction     -0.1526   0.004192  -162.8  ← bias
+
+ring2D — background, start at the truth, Float64: 20 sites, 20 converged, median 29 iterations, median 16 ms per fit
+  error                  bias    scatter       z
+  center.x             0.2251      1.285     0.8
+  center.y             0.1603      1.131     0.6
+  center.z                  0          0     NaN
+  r                    0.3793     0.6456     2.6
+  axis (°)              8.588      3.852    10.0
+  σ                         0          0     NaN
+  signal fraction    -0.03228    0.02394    -6.0  ← bias
+
+ring2D — background, start at the moved, Float64: 20 sites, 20 converged, median 44 iterations, median 31 ms per fit
+  error                  bias    scatter       z
+  center.x             0.2346      1.296     0.8
+  center.y              0.184      1.107     0.7
+  center.z                  0          0     NaN
+  r                    0.2656     0.8578     1.4
+  axis (°)              10.46      5.509     8.5
+  σ                    0.1423     0.8952     0.7
+  signal fraction    -0.03215    0.02398    -6.0  ← bias
+
+ring2D — background, start at the moved, Float32: 20 sites, 20 converged, median 44 iterations, median 22 ms per fit
+  error                  bias    scatter       z
+  center.x              0.237      1.294     0.8
+  center.y             0.1853      1.103     0.8
+  center.z                  0          0     NaN
+  r                    0.2601     0.8596     1.4
+  axis (°)              10.44      5.516     8.5
+  σ                    0.1476     0.8993     0.7
+  signal fraction    -0.03215    0.02398    -6.0  ← bias
+
+spcap — no background, start at the truth, Float64: 20 sites, 20 converged, median 42 iterations, median 110668 ms per fit
+  error                  bias    scatter       z
+  apex.x                 1.24      2.075     2.7
+  apex.y               -1.103      2.366    -2.1
+  apex.z             -0.07713      1.789    -0.2
+  c                 2.225e-05  0.0001919     0.5
+  α                 -0.005857    0.04113    -0.6
+  axis (°)              2.145     0.9349    10.3
+  σ                         0          0     NaN
+  signal fraction      -0.122    0.00362  -150.7  ← bias
+
+spcap — no background, start at the moved, Float64: 20 sites, 20 converged, median 53 iterations, median 167697 ms per fit
+  error                  bias    scatter       z
+  apex.x                1.284      2.053     2.8
+  apex.y               -1.113       2.34    -2.1
+  apex.z             -0.03817      1.742    -0.1
+  c                 3.114e-05  0.0001881     0.7
+  α                 -0.004736    0.04071    -0.5
+  axis (°)               2.14     0.9258    10.3
+  σ                    0.2248     0.5996     1.7
+  signal fraction     -0.1219   0.003604  -151.3  ← bias
+
+spcap — background, start at the truth, Float64: 20 sites, 20 converged, median 40 iterations, median 153937 ms per fit
+  error                  bias    scatter       z
+  apex.x              0.05604      3.025     0.1
+  apex.y              -0.7581      3.337    -1.0
+  apex.z              -0.9034      1.705    -2.4
+  c                -0.0001397  0.0001938    -3.2  ← bias
+  α                  -0.02347    0.03389    -3.1  ← bias
+  axis (°)              2.203      1.496     6.6
+  σ                         0          0     NaN
+  signal fraction    -0.02946    0.01069   -12.3  ← bias
+
+spcap — background, start at the moved, Float64: 20 sites, 20 converged, median 54 iterations, median 33895 ms per fit
+  error                  bias    scatter       z
+  apex.x              0.07642      2.979     0.1
+  apex.y              -0.7773      3.346    -1.0
+  apex.z              -0.8635      1.704    -2.3
+  c                -0.0001342  0.0001976    -3.0  ← bias
+  α                  -0.02277    0.03416    -3.0
+  axis (°)              2.171      1.441     6.7
+  σ                    0.4936      1.134     1.9
+  signal fraction    -0.02917    0.01132   -11.5  ← bias
+
+spcap — background, start at the moved, Float32: 20 sites, 20 converged, median 36 iterations, median 90316 ms per fit
+  error                  bias    scatter       z
+  apex.x             -0.04514      2.909    -0.1
+  apex.y              -0.5604      3.254    -0.8
+  apex.z              -0.8756      1.724    -2.3
+  c                -0.0001453  0.0001945    -3.3  ← bias
+  α                  -0.02473    0.03502    -3.2  ← bias
+  axis (°)              2.165      1.388     7.0
+  σ                    0.3466      1.026     1.5
+  signal fraction    -0.02921    0.01125   -11.6  ← bias
+
+double_ring — no background, start at the truth, Float64: 20 sites, 20 converged, median 74 iterations, median 488 ms per fit
+  error                  bias    scatter       z
+  center1.x          -0.03898     0.8527    -0.2
+  center1.y           -0.2576      1.593    -0.7
+  center1.z           -0.4125      2.389    -0.8
+  r1                   0.0537     0.6517     0.4
+  axis1 (°)             3.391      2.165     7.0
+  center2.x           -0.2678      1.352    -0.9
+  center2.y            0.1513      1.032     0.7
+  center2.z            0.1034      2.402     0.2
+  r2                 -0.02378      1.034    -0.1
+  axis2 (°)             4.001      2.641     6.8
+  σ                         0          0     NaN
+  signal fraction     -0.1327   0.003657  -162.3  ← bias
+  share 1            -0.01317    0.02988    -2.0
+
+double_ring — no background, start at the moved, Float64: 20 sites, 20 converged, median 91 iterations, median 192 ms per fit
+  error                  bias    scatter       z
+  center1.x          -0.07212     0.8705    -0.4
+  center1.y            -0.265      1.586    -0.7
+  center1.z           -0.5734      2.454    -1.0
+  r1                  0.05024     0.6568     0.3
+  axis1 (°)              3.89      2.525     6.9
+  center2.x           -0.2596      1.345    -0.9
+  center2.y            0.1428      1.024     0.6
+  center2.z           0.02486      2.398     0.0
+  r2                 -0.05781      1.055    -0.2
+  axis2 (°)             4.431      3.112     6.4
+  σ                  -0.02444     0.1062    -1.0
+  signal fraction     -0.1327   0.003631  -163.5  ← bias
+  share 1            -0.01473    0.03015    -2.2
+
+double_ring — background, start at the truth, Float64: 20 sites, 20 converged, median 74 iterations, median 166 ms per fit
+  error                  bias    scatter       z
+  center1.x           0.08188      0.984     0.4
+  center1.y          -0.05058      1.079    -0.2
+  center1.z             0.395      2.585     0.7
+  r1                   0.2108     0.9439     1.0
+  axis1 (°)             3.796      2.293     7.4
+  center2.x          -0.04095      1.217    -0.2
+  center2.y             0.384        1.4     1.2
+  center2.z           -0.5825      2.468    -1.1
+  r2                    0.155     0.6788     1.0
+  axis2 (°)             4.016      2.381     7.5
+  σ                         0          0     NaN
+  signal fraction    -0.03171    0.01078   -13.2  ← bias
+  share 1           -0.008425    0.03438    -1.1
+
+double_ring — background, start at the moved, Float64: 20 sites, 20 converged, median 92 iterations, median 369 ms per fit
+  error                  bias    scatter       z
+  center1.x             0.114     0.9843     0.5
+  center1.y          -0.02133      1.082    -0.1
+  center1.z            0.4949      2.662     0.8
+  r1                   0.1901       1.02     0.8
+  axis1 (°)             4.243      2.554     7.4
+  center2.x          -0.05041      1.217    -0.2
+  center2.y            0.3555      1.382     1.2
+  center2.z           -0.5879      2.504    -1.0
+  r2                   0.1326     0.6869     0.9
+  axis2 (°)             4.364      2.554     7.6
+  σ                   0.09421     0.8244     0.5
+  signal fraction    -0.03167    0.01071   -13.2  ← bias
+  share 1           -0.008077    0.03448    -1.0
+
+double_ring — background, start at the moved, Float32: 20 sites, 20 converged, median 82 iterations, median 366 ms per fit
+  error                  bias    scatter       z
+  center1.x            0.1138     0.9699     0.5
+  center1.y          -0.01708      1.077    -0.1
+  center1.z            0.5341      2.555     0.9
+  r1                   0.1979      1.022     0.9
+  axis1 (°)             4.278       2.54     7.5
+  center2.x          -0.05363      1.206    -0.2
+  center2.y            0.3528      1.391     1.1
+  center2.z           -0.5991      2.485    -1.1
+  r2                   0.1215     0.6808     0.8
+  axis2 (°)              4.33      2.531     7.7
+  σ                   0.08512     0.8213     0.5
+  signal fraction    -0.03167     0.0107   -13.2  ← bias
+  share 1           -0.007875     0.0346    -1.0
+
+spcap_ring — no background, start at the truth, Float64: 20 sites, 20 converged, median 85 iterations, median 9370 ms per fit
+  error                  bias    scatter       z
+  center.x             0.1704      0.954     0.8
+  center.y            -0.4834     0.8527    -2.5
+  center.z             0.1767      2.117     0.4
+  r                   -0.1946     0.6469    -1.3
+  axis (°)              3.606      1.919     8.4
+  cap_center.x        -0.9621      3.064    -1.4
+  cap_center.y          0.546       2.93     0.8
+  cap_center.z         -4.283      15.09    -1.3
+  cap_radius            3.683      13.56     1.2
+  cap_α              -0.03748     0.1794    -0.9
+  cap_axis (°)          4.796      2.495     8.6
+  σ                         0          0     NaN
+  signal fraction     -0.1029   0.005108   -90.1  ← bias
+  share 1           -0.003126     0.0133    -1.1
+
+spcap_ring — no background, start at the moved, Float64: 20 sites, 20 converged, median 112 iterations, median 34820 ms per fit
+  error                  bias    scatter       z
+  center.x             0.1529     0.9602     0.7
+  center.y            -0.4885     0.8926    -2.4
+  center.z             0.1948      2.075     0.4
+  r                   -0.2382     0.5776    -1.8
+  axis (°)              3.665      1.902     8.6
+  cap_center.x        -0.3315      3.377    -0.4
+  cap_center.y         0.2841      2.249     0.6
+  cap_center.z         -3.551      13.93    -1.1
+  cap_radius            2.928      12.47     1.1
+  cap_α              -0.02632     0.1772    -0.7
+  cap_axis (°)          4.427       2.27     8.7
+  σ                    0.3078      0.871     1.6
+  signal fraction     -0.1029   0.004978   -92.4  ← bias
+  share 1           -0.003065    0.01332    -1.0
+
+spcap_ring — background, start at the truth, Float64: 20 sites, 20 converged, median 88 iterations, median 26237 ms per fit
+  error                  bias    scatter       z
+  center.x           -0.05874      1.275    -0.2
+  center.y            0.02253      1.504     0.1
+  center.z            -0.6009      2.282    -1.2
+  r                  -0.04623     0.7872    -0.3
+  axis (°)              3.191      1.772     8.1
+  cap_center.x        -0.3441      2.289    -0.7
+  cap_center.y         0.3423      1.768     0.9
+  cap_center.z        -0.3552      10.65    -0.1
+  cap_radius            1.137      8.575     0.6
+  cap_α              0.006946     0.1897     0.2
+  cap_axis (°)          3.478      2.206     7.1
+  σ                         0          0     NaN
+  signal fraction    -0.02506    0.01001   -11.2  ← bias
+  share 1          -0.0002798    0.01261    -0.1
+
+spcap_ring — background, start at the moved, Float64: 20 sites, 20 converged, median 110 iterations, median 53301 ms per fit
+  error                  bias    scatter       z
+  center.x           -0.07528      1.263    -0.3
+  center.y            0.02668       1.51     0.1
+  center.z            -0.6289       2.16    -1.3
+  r                   -0.1614      0.781    -0.9
+  axis (°)              4.874      2.385     9.1
+  cap_center.x         0.8883          2     2.0
+  cap_center.y         0.8014       1.55     2.3
+  cap_center.z         0.3087      10.49     0.1
+  cap_radius           0.3892      8.321     0.2
+  cap_α               0.02197     0.1866     0.5
+  cap_axis (°)          4.089      1.789    10.2
+  σ                  -0.03848     0.8593    -0.2
+  signal fraction     -0.0252    0.01002   -11.2  ← bias
+  share 1          -9.837e-05    0.01261    -0.0
+
+spcap_ring — background, start at the moved, Float32: 20 sites, 20 converged, median 86 iterations, median 27290 ms per fit
+  error                  bias    scatter       z
+  center.x           -0.08989      1.284    -0.3
+  center.y            0.02826      1.477     0.1
+  center.z            -0.7385      2.211    -1.5
+  r                   -0.1648     0.7965    -0.9
+  axis (°)               4.45      2.578     7.7
+  cap_center.x          0.885      1.968     2.0
+  cap_center.y         0.8869      1.415     2.8
+  cap_center.z         0.6127      9.156     0.3
+  cap_radius            0.114      6.928     0.1
+  cap_α               0.02401     0.1848     0.6
+  cap_axis (°)          4.127      1.788    10.3
+  σ                   -0.1081      0.897    -0.5
+  signal fraction    -0.02518   0.009981   -11.3  ← bias
+  share 1          -0.0001936    0.01245    -0.1

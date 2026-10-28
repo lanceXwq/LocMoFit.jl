@@ -1,5 +1,6 @@
+from typing import Any, Mapping, Optional, Tuple
+
 import numpy as np
-from typing import Tuple, Optional, Mapping, Any
 from juliacall import Main as jl
 
 jl.seval("using LocMoFit")
@@ -60,8 +61,7 @@ def _normalize_freeze(freeze):
             # assume it's already a Julia Symbol (or convertible)
             syms.append(x)
 
-    # Build a Julia Tuple (not a Python tuple) to satisfy Tuple{Vararg{Symbol}}
-    # `jl.tuple` is the cleanest when available; otherwise we can seval.
+    # Build a Julia Tuple (not a Python tuple) to satisfy Tuple{Vararg{Symbol}}. `jl.tuple` is the cleanest when available; otherwise we can seval.
     try:
         return jl.tuple(*syms)
     except Exception:
@@ -72,6 +72,22 @@ def _normalize_freeze(freeze):
         return t
 
 
+def _normalize_tie(tie):
+    """
+    Accept a mapping {"r2": "r1"} or pairs [("r2", "r1")], each target => source.
+    Return a Julia tuple of Symbol pairs: (:r2 => :r1,)
+    """
+    if not tie:
+        return jl.seval("()")
+    items = tie.items() if isinstance(tie, Mapping) else tie
+    return jl.tuple(
+        *[
+            jl.Pair(jl.Symbol(str(target)), jl.Symbol(str(source)))
+            for target, source in items
+        ]
+    )
+
+
 def run_locmofit(
     model_name: str,
     locs: np.ndarray,
@@ -79,22 +95,42 @@ def run_locmofit(
     *,
     init_params: Optional[Mapping[str, Any]] = None,
     freeze: Tuple[str, ...] = (),
-    seed: int = 1,
+    tie: Any = None,
     spacing: float = 3.0,  # 3 nm
     max_iter: int = 200,
     dtype: str = "float32",
+    background: bool = True,
+    fov_volume: Optional[float] = None,
+    signal_prior: Any = (5, 2),
+    history: bool = False,
 ):
     init_params = _dict_to_namedtuple(dict(init_params or {}))
     freeze_syms = _normalize_freeze(freeze)
-    res, losses, states, model, umodel = jl.LocMoFit.run_locmofit(
+    fit = jl.LocMoFit.run_locmofit(
         model_name,
         locs,
         loc_precisions,
         max_iter=max_iter,
         init_params=init_params,
-        seed=seed,
         spacing=spacing,
         freeze=freeze_syms,
+        tie=_normalize_tie(tie),
         dtype=normalize_dtype(dtype),
+        background=background,
+        fov_volume=fov_volume,
+        signal_prior=(
+            jl.tuple(*signal_prior) if signal_prior is not None else None
+        ),
+        history=history,
     )
-    return {"result": res, "losses": losses, "states": states, "model": model, "umodel": umodel}
+    # history is Julia's `nothing` unless history=True; then it holds `losses` and `parameters`, one per iteration
+    return {
+        "parameters": fit.parameters,
+        "signal_fraction": fit.signal_fraction,
+        "weights": fit.weights,
+        "components": fit.components,
+        "loss": fit.loss,
+        "model_points": fit.model_points,
+        "result": fit.result,
+        "history": fit.history,
+    }

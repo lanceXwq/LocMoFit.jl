@@ -1,0 +1,20 @@
+# benchmarks/speed/speed.jl on the fitter after step 5 (2026-10-27): log_likelihood (the loop over localizations and model points, vectorized, exp_nonpositive) with its Enzyme rule, and objective (each value computed with its gradient, which is kept). Same machine and settings as before_rule_2026-10-27.txt; the second table is the throughput of 20 sites per model fitted one after another and in 8 threads (threads; see AGENTS.md, Many sites, on crashes).
+
+case         dtype        N      M   value ms    grad ms  v ns/NM  g ns/NM     fit s  iter     f     g
+ring         Float64    102    121     0.0353     0.0549     2.86     4.45   0.00276    41    43    42  Success
+ring         Float32    102    121     0.0213     0.0362     1.73     2.93   0.00282    38    71    39  Success
+ring2D       Float64    102    121     0.0318      0.049     2.57     3.97   0.00336    53    61    54  Success
+ring2D       Float32    102    121     0.0205     0.0345     1.66     2.80   0.00222    53    62    54  Success
+double_ring  Float64    187    242      0.119      0.173     2.62     3.82     0.016    84    87    85  Success
+double_ring  Float32    187    242     0.0619      0.108     1.37     2.38    0.0134    86   117    87  Success
+spcap        Float64    290   6648       3.23       5.12     1.68     2.66      0.29    48    55    49  Success
+spcap        Float32    290   6648       1.32        2.3     0.68     1.19      0.18    43    76    43  Success
+spcap_ring   Float64    330   1276      0.765       1.16     1.82     2.76     0.117    92    96    93  Success
+spcap_ring   Float32    330   1276       0.34      0.599     0.81     1.42    0.0734    78   113    78  Success
+
+case                          serial    threaded
+ring            20 sites     0.531 s     0.192 s   2.77×   identical losses: true
+ring2D          20 sites    0.0922 s    0.0382 s   2.42×   identical losses: true
+double_ring     20 sites     0.368 s     0.108 s   3.41×   identical losses: true
+spcap           20 sites      6.49 s      1.28 s   5.05×   identical losses: true
+spcap_ring      20 sites      2.53 s     0.524 s   4.82×   identical losses: true

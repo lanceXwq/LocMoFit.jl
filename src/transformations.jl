@@ -1,15 +1,5 @@
 # const VecOrTupleAnyN{T} = Union{AbstractVector{T},Tuple{Vararg{T}}}
 
-trans!(X::AbstractMatrix{T}, Δ𝐱::AbstractVector{T}) where {T} = X .+= Δ𝐱
-function trans!(X::AbstractMatrix{T}, Δ::T; dims::Integer) where {T}
-    X[dims, :] .+= Δ
-    return X
-end
-
-scale!(X::AbstractMatrix{T}, s::T) where {T} = lmul!(s, X)
-
-scale!(X::AbstractMatrix{T}, s::AbstractVector{T}) where {T} = X .*= s
-
 function rotmat(θ::T, ϕ::T) where {T}
     sθ, cθ = sincos(θ)
     sϕ, cϕ = sincos(ϕ)
@@ -39,11 +29,7 @@ function rotmat(θ::AbstractVector{T}, ϕ::AbstractVector{T}) where {T}
     a33 = cθ
 
     # 3×3 array on the same device as θ/ϕ
-    return vcat(
-        hcat(a11, a12, a13),
-        hcat(a21, a22, a23),
-        hcat(a31, a32, a33),
-    )
+    return vcat(hcat(a11, a12, a13), hcat(a21, a22, a23), hcat(a31, a32, a33))
 end
 
 # function rodrigues(ax, ay, az, theta, eps: float = 1e-10):
@@ -71,33 +57,30 @@ end
 # isapprox(θ, 0, atol=1e-10) ? RotZ(ϕ) : rodrigues(θ, ϕ)
 # AngleAxis(θ, -sin(ϕ), cos(ϕ), 0)
 
-# Slower but it takes vector input, making GPU execution easier. Also more robust (works even if rotvec == [0, 0])
-rotmat(rotvec::AbstractVector{T}) where {T} = RotationVec(rotvec..., zero(T))
+"""
+    chart_rotation(R₀, vx, vy)
 
-rot_trans!(X::AbstractMatrix{T}, θ::T, ϕ::T, x::T, y::T, z::T) where {T} = X .= fused_dense_bias_activation(identity, rotmat(θ, ϕ), X, [x, y, z])
-rot_trans!(X::AbstractMatrix{T}, θ::T, ϕ::T, Δ𝐱::AbstractVector{T}) where {T} = X .= fused_dense_bias_activation(identity, rotmat(θ, ϕ), X, Δ𝐱)
-rot_trans!(X::AbstractMatrix{T}, θ::AbstractVector{T}, ϕ::AbstractVector{T}, Δ𝐱::AbstractVector{T}) where {T} = X .= fused_dense_bias_activation(identity, rotmat(θ, ϕ), X, Δ𝐱)
+The rotation that orients a model whose axis has tangent-chart coordinates `(vx, vy)`. The chart's frame `R₀` (from `rotmat(θ₀, ϕ₀)` of the starting axis) turns z to its center; the axis is `R₀·m` with `m = normalize((vx, vy, 1))`, and the rotation is `R₀` times the minimal rotation taking z to `m`. `m₃ > 0` for every `(vx, vy)`, so that minimal rotation never meets its singularity (at `m = -z`), and the chart reaches every axis within 90° of its center (derivations/derivation.qmd).
+"""
+function chart_rotation(R₀::AbstractMatrix, vx, vy)
+    r = inv(sqrt(1 + vx^2 + vy^2))
+    m₁, m₂, m₃ = vx * r, vy * r, r
+    k = inv(1 + m₃)
+    M = [
+        1-k*m₁^2 -k*m₁*m₂ m₁
+        -k*m₁*m₂ 1-k*m₂^2 m₂
+        -m₁ -m₂ m₃
+    ]
+    return R₀ * M
+end
+
+# rotate the points X (3×M) by R, then shift them by (x, y, z); returns new points
+place(X::AbstractMatrix, R::AbstractMatrix, x, y, z) = R * X .+ [x, y, z]
 # if isapprox(θ, 0, atol=1e-10) && isapprox(ϕ, 0, atol=1e-10)
 #     trans!(X, Δ𝐱)
 # else
 #     X .= muladd(rotmat(θ, ϕ), X, Δ𝐱)
 # end
-
-function unit_sphere_to_cap(sphere_pts::AbstractMatrix{T}, half_angle::T) where {T}
-    ca = cos(half_angle)
-    a = (1 + ca) / 2
-    b = (1 - ca) / 2
-
-    cap_pts = copy(sphere_pts)
-    cap_pts[3, :] .= muladd.(b, view(cap_pts, 3, :), a)
-
-    r1 = @views sqrt.(cap_pts[1, :] .^ 2 .+ cap_pts[2, :] .^ 2)
-    r2 = sqrt.(1 .- view(cap_pts, 3, :) .^ 2)
-    s = r2 ./ r1
-
-    @views cap_pts[1:2, :] .*= s'
-    return cap_pts
-end
 
 # function unit_sphere_to_cap(sphere_pts::AbstractMatrix{T}, half_angle::AbstractVector{T}) where {T}
 #     x = sphere_pts[1, :]
