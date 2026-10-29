@@ -36,6 +36,23 @@ Threads within one fit (splitting the localizations inside the rule, where Enzym
 
 Float64 fits are bit-identical across sessions and thread counts. Float32 fits are reproducible only for a fixed `julia -t`: the loss is the same, but Enzyme's compiled gradient differs in its last bits with the thread count, and BFGS then takes a different path to the same optimum (the tutorial cap: 44 or 52 iterations, final losses 1·10⁻⁴ apart, far below the statistical error). This was so before the rule as well, where the paths parted at iteration 2 instead of 5.
 
+## Known issue: Float32 fits can stop early (found 2026-10-28, open)
+
+In Float32 (the default `dtype` until 2026-10-29, now an option), BFGS can stop before the gradient reaches `tol`, and the fit still reports `Success`. Optim.jl also stops when the loss is unchanged in two successive iterations (|f − f′| ≤ `f_reltol`·|f| with `f_reltol = 0`), and near the optimum a Float32 loss stops changing. Found while porting LocMoFitPy, whose float32 fits of the same tutorial sites reach the float64 optimum:
+
+| Tutorial site (moved start) | Float32 iterations (Float64) | largest gradient component at the stop | loss above the Float64 optimum, per localization | largest parameter error |
+| --- | --- | --- | --- | --- |
+| ring | 34 (43) | 6.6e-4 | 8e-5 | z 0.25 nm |
+| spherical cap | 42 (50) | 4.6e-4 | 1.6e-4 | apex x 0.30 nm, σ 0.52 nm |
+| cap with ring | 63 (94) | 6.5e-4 | 3.0e-3 | the cap's apex 3.3 and 6.4 nm in x2, y2 |
+| ring in 2D, double ring | 54, 94 (53, 87) | — | none (they reach the optimum) | — |
+
+**Effect on accuracy.** Over the benchmark's 20 sites per model (`benchmarks/accuracy/prior_5_2_2026-10-28.txt`, background, moved start), the Float32 groups have the same bias as the Float64 groups and a scatter within about 10% of theirs (the cap with ring's cap center: 2.2–12.4 nm against 2.2–11.1 nm), with fewer iterations (65 against 92). So the early stops add error that is small against the statistical error but not zero, and they are not a bias.
+
+**Likely cause.** The kernel sums the localizations' log-densities one after another in Float32 (`likelihood_pass`), so the total, about −5,000 for a site, carries rounding errors of order 10⁻⁵ per localization that do not change smoothly with the parameters; XLA sums them pairwise, which is why LocMoFitPy's float32 fits are not affected. Not yet confirmed by a fix.
+
+**Proposed fix (not done).** Combine each localization's terms and sum them over localizations in Float64 inside the kernel, keeping the work per point in Float32 (it costs nothing measurable: the sums are per localization), and add a test that a Float32 fit of the tutorial data reaches the gradient tolerance. Float64 became the default on 2026-10-29 (the owner's decision), so the issue affects only fits that ask for Float32.
+
 ## The signal prior (2026-10-28)
 
 The Beta prior on the signal fraction π keeps its mode at 0.8 (the owner's choice) but became flatter: Beta(5, 2), worth 5 localizations, instead of DynMoFit's Beta(197, 50), worth 245. On the benchmark's sites with 15% background, Beta(197, 50) pulled π by −0.025 to −0.033 (z down to −13); Beta(41, 11) by about −0.01 to −0.016; Beta(17, 5) by −0.004 to −0.009; Beta(5, 2) by at most 0.004, within its scatter of about 0.013. The geometry was the same under every prior. On data without background the fitted π went from 0.85–0.90 to 0.985–0.994 (truth 1). Beta(5, 2) still vanishes at π = 0 and 1, so π stays inside (0, 1) (`benchmarks/accuracy/prior_5_2_2026-10-28.txt`).

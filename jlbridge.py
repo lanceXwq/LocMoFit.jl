@@ -98,7 +98,7 @@ def run_locmofit(
     tie: Any = None,
     spacing: float = 3.0,  # 3 nm
     max_iter: int = 200,
-    dtype: str = "float32",
+    dtype: str = "float64",
     background: bool = True,
     fov_volume: Optional[float] = None,
     signal_prior: Any = (5, 2),

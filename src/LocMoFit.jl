@@ -38,7 +38,7 @@ function fit_problem(
     freeze=(),
     tie=(),
     spacing::Real=3.0,
-    dtype::Type{<:AbstractFloat}=Float32,
+    dtype::Type{<:AbstractFloat}=Float64,
     background::Bool=true,
     fov_volume::Union{Nothing,Real}=nothing,
     signal_prior::Union{Nothing,Tuple{Real,Real}}=(5, 2),
@@ -195,7 +195,7 @@ Fit `model` to one site's localizations by maximizing the posterior of derivatio
 - `max_iter`: the most iterations the optimizer takes.
 - `tol`: the fit has converged when no component of the gradient of [`loss`](@ref) exceeds `tol`. The default, 1e-4, leaves the parameters much closer to the optimum than their statistical error (a position within about 0.005 nm for a ring of 100 localizations, whose error is about 0.7 nm) and is reachable in `Float32`.
 - `spacing`: the distance between model points, in nm. The points are generated once, from the starting values, and stay fixed during the fit.
-- `dtype`: the floating-point type of the fit.
+- `dtype`: the floating-point type of the fit, `Float64` by default. `Float32` is faster on large models (a cap fit 1.6×) but can stop early, before the gradient reaches `tol` (a known issue: NOTES.md).
 - `background`: whether some localizations are background, uniform over the field of view; their share is 1 − logistic(`logit_prob`), fitted from 0.1.
 - `fov_volume`: the volume (area, in 2D) of the field of view the localizations were selected from, in nm³ (nm²). Without it, the bounding box of the localizations is used, which is a little smaller.
 - `signal_prior`: `(a, b)` of the Beta prior on the signal fraction, or `nothing` for none. The default, (5, 2), has its mode at 0.8 and weighs as much as 5 localizations, so it keeps the fraction inside (0, 1) and pulls it toward 0.8 only on small sites.

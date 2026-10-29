@@ -6,7 +6,7 @@ LocMoFit.jl and its JAX port LocMoFitPy re-implement the fitting core of the ori
 - deliberate changes;
 - issues found in the MATLAB code, which the ports must not copy.
 
-LocMoFit.jl and LocMoFitPy are meant to behave identically, so "the ports" means both, unless a row says otherwise.
+LocMoFit.jl and LocMoFitPy are meant to behave identically, so "the ports" means both, unless a row says otherwise. Since 2026-10-28 LocMoFitPy has LocMoFit.jl's features and gives the same fits (`../LocMoFitPy/JULIA_DIFFERENCES.md`); "LocMoFit.jl" in a row below then holds for LocMoFitPy too.
 
 The comparison is against SMAP commit `d750f5ac` (2026-09-01); LocMoFit itself last changed in `d066594d` (2026-08-28). Status as of 2026-10-25:
 
@@ -19,13 +19,13 @@ The comparison is against SMAP commit `d750f5ac` (2026-09-01); LocMoFit itself l
 
 | Topic | MATLAB LocMoFit | LocMoFit.jl / LocMoFitPy | Status |
 | --- | --- | --- | --- |
-| Signal term | Gaussian mixture over the model points. Each localization has its own diagonal covariance. Points carry weights n, and the mixture is normalized by Σn. | The same mixture without point weights. LocMoFit.jl normalizes it (the mean over each component's points, the components weighted by their shares; `derivations/derivation.qmd`); LocMoFitPy omits the 1/M normalization, a constant offset without background. | — |
-| Background | Uniform background per layer, p = (1 − b)·f + b·U. The weight b is fitted in [0.001, 0.999], or reparametrized as a density in localizations/µm². U is the inverse of a fixed volume set by the ROI size d: in 3D a cylinder of diameter d and height d, U = 1/(π(d/2)²·d); in 2D a disc, U = 1/(π(d/2)²). | LocMoFit.jl: p = π·f + (1 − π)/V as in DynMoFit, with π = logistic(`logit_prob`) fitted, a Beta prior on π (default Beta(5, 2): mode 0.8, worth 5 localizations) and V the volume (area in 2D) of the field of view, `fov_volume` (default: the localizations' bounding box). LocMoFitPy: none. | done in LocMoFit.jl; LocMoFitPy to follow |
-| Blur (`variation` / `sigma`) | Added to each precision in quadrature, √(s² + v²), starting (fixed) at 0. | LocMoFit.jl: in quadrature, starting at 1 nm, since the likelihood is stationary in σ at 0. LocMoFitPy currently adds it linearly, (s + σ)². That breaks parity and is to be fixed. | — |
+| Signal term | Gaussian mixture over the model points. Each localization has its own diagonal covariance. Points carry weights n, and the mixture is normalized by Σn. | The same mixture without point weights. LocMoFit.jl normalizes it (the mean over each component's points, the components weighted by their shares; `derivations/derivation.qmd`); | — |
+| Background | Uniform background per layer, p = (1 − b)·f + b·U. The weight b is fitted in [0.001, 0.999], or reparametrized as a density in localizations/µm². U is the inverse of a fixed volume set by the ROI size d: in 3D a cylinder of diameter d and height d, U = 1/(π(d/2)²·d); in 2D a disc, U = 1/(π(d/2)²). | LocMoFit.jl: p = π·f + (1 − π)/V as in DynMoFit, with π = logistic(`logit_prob`) fitted, a Beta prior on π (default Beta(5, 2): mode 0.8, worth 5 localizations) and V the volume (area in 2D) of the field of view, `fov_volume` (default: the localizations' bounding box). | done |
+| Blur (`variation` / `sigma`) | Added to each precision in quadrature, √(s² + v²), starting (fixed) at 0. | LocMoFit.jl: in quadrature, starting at 1 nm, since the likelihood is stationary in σ at 0. | done |
 | Precision floor | For all but `'discrete'` models, precisions below the median are raised to the median (advanced setting `minSigma`). | Every localization keeps its own precision. | by design |
 | Missing z precision | If any `locprecznm` is 0, every z precision is replaced by 3 × `locprecnm`. | A precision is required for every axis. | by design |
 | Several channels (layers) | Each model belongs to a layer, and each layer has its own background. Layer counts are reweighted by max(N)/N_ℓ (`layerNorm`, on by default), which is not a likelihood. | One channel. | open |
-| Objective | A sum of log-likelihoods. There is also an unused `'correlation'` objective (a sum of densities) and a `'fast'` mode that drops terms beyond 3.5σ. | Per localization: LocMoFit.jl minus the log posterior (with the prior on π), LocMoFitPy the negative log-likelihood. The optimum is the same as for the sum. | by design |
+| Objective | A sum of log-likelihoods. There is also an unused `'correlation'` objective (a sum of densities) and a `'fast'` mode that drops terms beyond 3.5σ. | Per localization: LocMoFit.jl minus the log posterior (with the prior on π). The optimum is the same as for the sum. | by design |
 
 ## 2. Models
 
@@ -34,9 +34,9 @@ The comparison is against SMAP commit `d750f5ac` (2026-09-01); LocMoFit itself l
 | Parameter | MATLAB LocMoFit | LocMoFit.jl / LocMoFitPy | Status |
 | --- | --- | --- | --- |
 | Position | `x`, `y`, `z` (nm) | `x`, `y`, `z` (nm) | — |
-| Orientation | `xrot`, `yrot`, `zrot` in degrees, with R = Rx·Ry·Rz. When all three are free, the fit uses an axis-angle vector instead. | LocMoFit.jl: the axis by two tangent-chart coordinates `vx`, `vy` around the starting axis, given as `theta`, `phi` (no pole; `derivations/derivation.qmd`). LocMoFitPy: `theta`, `phi` (radians), which turn the model's z axis to polar angle θ and azimuth ϕ, with a pole at θ = 0. In both there is no rotation about the model's own axis, so only rotationally symmetric models can be fully oriented. | axis: done in LocMoFit.jl; rotation about the axis: open |
+| Orientation | `xrot`, `yrot`, `zrot` in degrees, with R = Rx·Ry·Rz. When all three are free, the fit uses an axis-angle vector instead. | LocMoFit.jl: the axis by two tangent-chart coordinates `vx`, `vy` around the starting axis, given as `theta`, `phi` (no pole; `derivations/derivation.qmd`). There is no rotation about the model's own axis, so only rotationally symmetric models can be fully oriented. | axis: done; rotation about the axis: open |
 | Scale | `xscale`, `yscale`, `zscale` (fixed at 1 by default) | none | open |
-| Model weight | `weight`, normalized among the models of a layer | LocMoFit.jl: one share per component of a composite, softmax(0, `omega2`, …, `omegaK`), free by default and freezable. LocMoFitPy: none (its composites pool their points, so each part is weighted by its size). | done in LocMoFit.jl |
+| Model weight | `weight`, normalized among the models of a layer | LocMoFit.jl: one share per component of a composite, softmax(0, `omega2`, …, `omegaK`), free by default and freezable. | done |
 
 ### Model types and sampling
 
@@ -52,7 +52,7 @@ The comparison is against SMAP commit `d750f5ac` (2026-09-01); LocMoFit itself l
 
 MATLAB fits any number of models together (`addModel`). Each model sits in a layer, and the models are mixed by normalized weights. The extrinsic parameters of model k are documented as relative to model 1, but see issue 2 in section 7.
 
-LocMoFit.jl fits any number of simple models together as well: `Composite(components...)`, with component 1 placed by its pose in the world and every other component by its pose in component 1's frame, absolute shape parameters, one shared blur, and ties between parameters (`tie=(:r2 => :r1,)`). `DoubleRing` and `SpCapRing` are presets of it. LocMoFitPy has only built-in composites, `NuclearPoreComplex` (= `DoubleRing`, with `r2` as a ratio to `r1`), until the port (`../LocMoFitPy/JULIA_DIFFERENCES.md`). LocMoFit.jl averages each component's points on its own and weights the components by their shares (`ω`); LocMoFitPy pools the points of all components into one set, so each component is weighted by its size. That assumes equal labeling density on every component. When the components differ in dimension, as the ring and the cap of `SpCapRing` do, the weights even depend on `spacing`: at a ring radius of 50 nm, the ring gets 2.9% of the points at a 3 nm spacing and 1.5% at 1.5 nm.
+LocMoFit.jl fits any number of simple models together as well: `Composite(components...)`, with component 1 placed by its pose in the world and every other component by its pose in component 1's frame, absolute shape parameters, one shared blur, and ties between parameters (`tie=(:r2 => :r1,)`). `DoubleRing` and `SpCapRing` are presets of it. LocMoFit.jl averages each component's points on its own and weights the components by their shares (`omega2`, …). Until 2026-10-28 LocMoFitPy pooled the points of all components into one set (its `NuclearPoreComplex`), so each component was weighted by its size. That assumes equal labeling density on every component. When the components differ in dimension, as the ring and the cap of `SpCapRing` do, the weights even depend on `spacing`: at a ring radius of 50 nm, the ring gets 2.9% of the points at a 3 nm spacing and 1.5% at 1.5 nm.
 
 Status: done in LocMoFit.jl (2026-10-26). Composite models carry one weight per component: the share of the signal localizations it explains, with each component normalized over its own points. The weights are free by default and can be frozen, for example at the size ratio when equal labeling density is justified.
 
@@ -63,9 +63,9 @@ MATLAB LocMoFit lists 23 models (`modelList.m`).
 | MATLAB model | Equivalent in the ports |
 | --- | --- |
 | `ring2D`, `ring3D` | `Ring`; a 2D fit uses its first two coordinates. |
-| `sphericalCap3D_surfaceArea`, `sphericalCap3Dp_surfaceArea` | `SphericalCap`. LocMoFit.jl uses the same constant-area cap as MATLAB, parametrized by its scale s (area 4πs²) and κ′ = tanh η (0 flat, ±1 a full sphere, negative inverted; MATLAB's close angle α has 1 − cos α = 2κ′²), with its point count from its own area. LocMoFitPy uses the curvature c and the half-angle α: a flat cap then needs c → 0, and its point count, computed from the full sphere as 4π/(c²·spacing²), is four times what a hemisphere needs and grows without bound. |
-| `dualRing3D_discrete` (NPC: 8 corners × 2 copies, ring distance, twist) | `DoubleRing` / `NuclearPoreComplex`: two continuous rings with a free relative position, size ratio and tilt. There is no 8-fold symmetry. |
-| — | `SpCapRing` (a cap above a ring), a preset composite of `Ring` and `SphericalCap` in LocMoFit.jl; missing in LocMoFitPy. MATLAB would build it as a composite too. |
+| `sphericalCap3D_surfaceArea`, `sphericalCap3Dp_surfaceArea` | `SphericalCap`. LocMoFit.jl uses the same constant-area cap as MATLAB, parametrized by its scale s (area 4πs²) and κ′ = tanh η (0 flat, ±1 a full sphere, negative inverted; MATLAB's close angle α has 1 − cos α = 2κ′²), with its point count from its own area. Until 2026-10-28 LocMoFitPy used the curvature c and the half-angle α: a flat cap then needed c → 0, and its point count, computed from the full sphere as 4π/(c²·spacing²), was four times what a hemisphere needs and grew without bound. |
+| `dualRing3D_discrete` (NPC: 8 corners × 2 copies, ring distance, twist) | `DoubleRing`: two continuous rings with a free relative position, size ratio and tilt. There is no 8-fold symmetry. |
+| — | `SpCapRing` (a cap above a ring), a preset composite of `Ring` and `SphericalCap`. MATLAB would build it as a composite too. |
 | `arc2D`, `arc2D_arcLen`, `bucket2D` | none |
 | `cspline3D_midPoint`, `csplineTube3D_midPoint`, `csplineClosedTube3D_midPoint`, `csplineTube3D_xyz` | none |
 | `dualEllipse3D_discrete`, `dualEllipse3D_avgR_discrete`, `ellipse2D`, `ellipse3D` | none |
@@ -80,13 +80,13 @@ The MATLAB folder also has 12 unlisted models (`cylinder3D`, line segments, `sim
 
 | Topic | MATLAB LocMoFit | LocMoFit.jl / LocMoFitPy | Status |
 | --- | --- | --- | --- |
-| Bounds | Relative `lb`/`ub` around the start value, clipped to absolute `min`/`max`. They are hard bounds, through `fminsearchbnd`'s transform or `fmincon`'s bounds. | Soft quadratic penalties on a few parameters. LocMoFit.jl: sizes ≥ 1 nm (the orientation and the cap's κ′ are unconstrained by their parametrization). LocMoFitPy: curvature ≤ 1 nm⁻¹, angles in [0, π]. | open |
+| Bounds | Relative `lb`/`ub` around the start value, clipped to absolute `min`/`max`. They are hard bounds, through `fminsearchbnd`'s transform or `fmincon`'s bounds. | Soft quadratic penalties on a few parameters. LocMoFit.jl: sizes ≥ 1 nm (the orientation and the cap's κ′ are unconstrained by their parametrization). | open |
 | Fixing parameters | `fix` column | `freeze` | — |
 | Starting values from the data | Converter rules: MATLAB expressions such as `median(locs.xnm)` → `m1.lPar.x`, evaluated once before the fit. | `init_params` only | open |
-| Ties between parameters during a fit | none (converter rules only set starting values) | LocMoFit.jl: `tie` (target => source); LocMoFitPy: none | — |
+| Ties between parameters during a fit | none (converter rules only set starting values) | `tie` (target => source) | — |
 | Passing parameters between fits | Converter rules that take another fit as the source; `matchAllPar`; one fitter per step | none | open |
 | Cascade | Repeated fits with scaled bounds (and an extra σ offset), each starting from the previous result | none | open |
-| Optimizer | `fminsearchbnd` (Nelder–Mead, the default), `fmincon` (finite-difference gradients), `particleswarm` (global search) | Gradients from automatic differentiation. LocMoFit.jl: BFGS with a backtracking line search (Optim.jl, Enzyme), stopping when no gradient component exceeds `tol`. LocMoFitPy: L-BFGS (optax, zoom line search). | done in LocMoFit.jl, as in DynMoFit; LocMoFitPy to follow |
+| Optimizer | `fminsearchbnd` (Nelder–Mead, the default), `fmincon` (finite-difference gradients), `particleswarm` (global search) | Gradients from automatic differentiation. LocMoFit.jl: BFGS with a backtracking line search (Optim.jl, Enzyme), stopping when no gradient component exceeds `tol`. LocMoFitPy runs the same algorithm, transcribed in JAX. | done, as in DynMoFit |
 | Multiple starts | none (use `particleswarm`, or random starting values through a converter rule) | none | — |
 
 ## 4. Results and diagnostics
@@ -96,11 +96,11 @@ The MATLAB folder also has 12 unlisted models (`cylinder3D`, line segments, `sim
 | Fitted parameters | yes | yes | — |
 | Log-likelihood | `LLfit`, per localization | the final loss | — |
 | AIC, AICc, normalized AICc | yes | no | open |
-| Background density and background-free localization count | yes | LocMoFit.jl: the signal fraction (`signal_fraction`), from which both follow; LocMoFitPy: no | — |
+| Background density and background-free localization count | yes | the signal fraction (`signal_fraction`), from which both follow | — |
 | Expected log-likelihood and z-score (from 1,000 simulations of the fitted model); an "overfitted" control (the localizations as the model) | optional | no | open |
 | Confidence intervals | optional; see issue 11 | no | open |
 | Derived parameters per model (radius, curvature, area, …) | `getDerivedPars` | no | open |
-| Optimization history | optional, for playback in the viewer | LocMoFit.jl: the loss and the parameters per iteration, with `history=true`. LocMoFitPy: the loss and the gradient norm per iteration, always. | — |
+| Optimization history | optional, for playback in the viewer | LocMoFit.jl: the loss and the parameters per iteration, with `history=true`. | — |
 | Model points | for plotting | returned | — |
 
 ## 5. Around the fitter (SMAP)
