@@ -10,9 +10,6 @@ fit = run_locmofit(
     "Ring",
     locs,
     loc_precs;
-    max_iter=200,
-    dtype=Float32,
-    spacing=3.0,
     init_params=(x=15, y=0, z=20, r=57.5, theta=0.45, phi=0.95),
     freeze=(:z),
     fov_volume=300.0^2,

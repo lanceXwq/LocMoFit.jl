@@ -2,47 +2,9 @@
 #     julia -t 8 --project=. benchmarks/speed/speed.jl [threads] [case names...]
 # BenchmarkTools comes from the global environment. Enzyme's compiled code can vary between Julia sessions (DynMoFit.jl/NOTES.md), so compare timings across more than one run.
 using LocMoFit, BenchmarkTools, Enzyme, Printf
-using LocMoFit: fit_problem, loss
+using LocMoFit: loss
+include(joinpath(@__DIR__, "..", "..", "test", "tutorial.jl"))
 
-parsefield(s) =
-    if s == "true"
-        1.0
-    elseif s == "false"
-        0.0
-    else
-        parse(Float64, s)
-    end
-function readcsv(path)
-    L = readlines(path)
-    names = Tuple(Symbol.(split(L[1], ",")))
-    rows = [parsefield.(split(l, ",")) for l in L[2:end]]
-    return NamedTuple{names}(Tuple([r[k] for r in rows] for k in eachindex(names)))
-end
-
-# the moved start of test/fit.jl and the accuracy benchmark
-function moved(p)
-    shift(k, v) =
-        if k in (:x, :y, :z, :x1, :y1, :z1, :x2, :y2, :z2)
-            v + 5
-        elseif k in (:r, :r1, :r2, :s, :s2)
-            1.15v
-        elseif k in (:eta, :eta2)
-            atanh(0.85tanh(v))
-        elseif k in (:theta, :phi, :theta1, :phi1, :theta2, :phi2)
-            v + 0.15
-        elseif k == :sigma
-            2.0
-        elseif k == :logit_prob
-            log(9)
-        elseif k == :omega2
-            0.0
-        else
-            v
-        end
-    return NamedTuple{keys(p)}(Tuple(shift(k, v) for (k, v) in pairs(p)))
-end
-
-const EXAMPLES = joinpath(@__DIR__, "..", "..", "examples", "data")
 const ACCURACY = joinpath(@__DIR__, "..", "accuracy", "data")
 const CASES = (
     (name="ring", model="Ring", D=3, freeze=()),
@@ -52,24 +14,13 @@ const CASES = (
     (name="spcap_ring", model="SpCapRing", D=3, freeze=()),
 )
 
-function columns(D)
-    return if D == 3
-        ((:x_nm, :y_nm, :z_nm), (:x_err_nm, :y_err_nm, :z_err_nm))
-    else
-        ((:x_nm, :y_nm), (:x_err_nm, :y_err_nm))
-    end
-end
-function matrix(d, cols, rows=eachindex(d[cols[1]]))
-    return permutedims(reduce(hcat, [d[c][rows] for c in cols]))
-end
-
 function start(case)
-    truth = map(first, readcsv(joinpath(EXAMPLES, case.name * "_parameters.csv")))
+    truth = tutorial_parameters(case.name)
     return merge(moved(truth), NamedTuple{case.freeze}(map(k -> truth[k], case.freeze)))
 end
 
 function site_speed(case, dtype)
-    d = readcsv(joinpath(EXAMPLES, case.name * ".csv"))
+    d = readcsv(joinpath(TUTORIAL, case.name * ".csv"))
     cols = columns(case.D)
     locs, precs = matrix(d, cols[1]), matrix(d, cols[2])
     kw = (init_params=start(case), freeze=case.freeze, dtype, fov_volume=300.0^case.D)
@@ -117,9 +68,7 @@ function throughput(case)
         ),
         sites,
     )
-    kw = (
-        init_params=start(case), freeze=case.freeze, dtype=Float64, fov_volume=300.0^case.D
-    )
+    kw = (init_params=start(case), freeze=case.freeze, fov_volume=300.0^case.D)
     fit(k) = run_locmofit(case.model, data[k]...; kw...).loss
     fit(1)                                   # compile on one thread first
     serial = @elapsed foreach(fit, eachindex(data))

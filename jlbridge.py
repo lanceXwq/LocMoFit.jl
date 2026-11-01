@@ -15,7 +15,7 @@ def normalize_dtype(dtype):
 
 
 def _dict_to_namedtuple(d: dict):
-    # Returns a Julia NamedTuple value, e.g. (; z=53.0, c=0.02)
+    # Returns a Julia NamedTuple value, e.g. (; z=53.0, s=60.0)
     if not d:
         return jl.seval("(;)")
     # Stable order (optional but nice)
@@ -37,16 +37,16 @@ def _normalize_freeze(freeze):
     """
     Accept:
       - () / [] / None
-      - "c"                     (single string)
-      - ("c", "z")              (tuple/list of strings)
-      - (jl.Symbol("c"), ...)   (already-symbols)
+      - "z"                     (single string)
+      - ("x", "z")              (tuple/list of strings)
+      - (jl.Symbol("z"), ...)   (already-symbols)
     Return:
-      - Julia tuple of Symbols: (:c, :z)
+      - Julia tuple of Symbols: (:x, :z)
     """
     if freeze is None:
         return jl.seval("()")
 
-    # If MATLAB passes "c", Python sees a str
+    # If MATLAB passes "z", Python sees a str
     if isinstance(freeze, str):
         names = [freeze]
     else:
@@ -61,15 +61,8 @@ def _normalize_freeze(freeze):
             # assume it's already a Julia Symbol (or convertible)
             syms.append(x)
 
-    # Build a Julia Tuple (not a Python tuple) to satisfy Tuple{Vararg{Symbol}}. `jl.tuple` is the cleanest when available; otherwise we can seval.
-    try:
-        return jl.tuple(*syms)
-    except Exception:
-        # fallback: construct in Julia
-        setattr(jl, "__freeze_syms", syms)
-        t = jl.seval("Tuple(__freeze_syms)")
-        delattr(jl, "__freeze_syms")
-        return t
+    # a Julia Tuple (not a Python tuple), to satisfy Tuple{Vararg{Symbol}}
+    return jl.tuple(*syms)
 
 
 def _normalize_tie(tie):
@@ -98,6 +91,7 @@ def run_locmofit(
     tie: Any = None,
     spacing: float = 3.0,  # 3 nm
     max_iter: int = 200,
+    tol: float = 1e-4,
     dtype: str = "float64",
     background: bool = True,
     fov_volume: Optional[float] = None,
@@ -111,6 +105,7 @@ def run_locmofit(
         locs,
         loc_precisions,
         max_iter=max_iter,
+        tol=tol,
         init_params=init_params,
         spacing=spacing,
         freeze=freeze_syms,

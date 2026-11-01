@@ -10,11 +10,7 @@ fit = run_locmofit(
     "SphericalCap",
     locs,
     loc_precs;
-    max_iter=200,
-    dtype=Float32,
-    spacing=3.0,
     init_params=(x=10, y=15, z=45, s=69, eta=0.45, theta=0.4, phi=-0.85),
-    freeze=(),
     fov_volume=300.0^3,
     history=true,
 )

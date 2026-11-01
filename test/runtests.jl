@@ -135,7 +135,6 @@ function problem(model, θ, starts, locs, precs; background=true, kwargs...)
         precs;
         init_params=merge(θ, f, axes_init(model, starts)),
         spacing=SPACING,
-        dtype=Float64,
         fov_volume=FOV^size(locs, 1),
         background,
         kwargs...,
@@ -342,7 +341,6 @@ end
             precs ./ L;
             init_params=merge(scaled(θ), fractions(model), axes_init(model, starts)),
             spacing=SPACING / L,
-            dtype=Float64,
             fov_volume=(FOV / L)^D,
         )
         @test loss(uL, pL) ≈ loss(u, p) - D * log(L) rtol = 1e-10
@@ -479,13 +477,7 @@ end
     locs, precs = test_data(model, θ, starts; every=3)
     init = merge(θ, (x=0.0, z=0.0, r=30.0, sigma=1.0), axes_init(model, starts))
     r = run_locmofit(
-        "Ring",
-        locs,
-        precs;
-        init_params=init,
-        freeze=(:sigma,),
-        dtype=Float64,
-        spacing=SPACING,
+        "Ring", locs, precs; init_params=init, freeze=(:sigma,), spacing=SPACING
     )
     @test r.history === nothing
     @test r.parameters.sigma == 1.0                                     # frozen
@@ -496,13 +488,7 @@ end
         chart_rotation(r.unit_model.chart, r.parameters.vx, r.parameters.vy)[:, 3]
     @test r.components[1].axis ≈ direction(r.components[1].theta, r.components[1].phi)
     p0, u0 = fit_problem(
-        Ring(),
-        locs,
-        precs;
-        init_params=init,
-        freeze=(:sigma,),
-        dtype=Float64,
-        spacing=SPACING,
+        Ring(), locs, precs; init_params=init, freeze=(:sigma,), spacing=SPACING
     )
     @test r.loss < loss(u0, p0)
     @test r.unit_model.points == unit_points(model, init; spacing=SPACING)   # not changed by the fit
@@ -514,7 +500,6 @@ end
         precs;
         init_params=init,
         freeze=(:sigma,),
-        dtype=Float64,
         spacing=SPACING,
         history=true,
     )
@@ -529,7 +514,6 @@ end
         precs;
         init_params=merge(init, (theta=π,)),
         background=false,
-        dtype=Float64,
         spacing=SPACING,
         max_iter=5,
     )
@@ -546,7 +530,6 @@ end
             precs;
             init_params=merge(θ, axes_init(model, starts)),
             freeze=(:sigma,),
-            dtype=Float64,
             spacing=SPACING,
             max_iter=5,
         )
@@ -562,7 +545,6 @@ end
         precs;
         init_params=merge(θ, axes_init(model, starts)),
         tie=(:r2 => :r1,),
-        dtype=Float64,
         spacing=SPACING,
         max_iter=20,
     )

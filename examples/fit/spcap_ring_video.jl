@@ -10,9 +10,6 @@ fit = run_locmofit(
     "SpCapRing",
     locs,
     loc_precs;
-    max_iter=200,
-    dtype=Float32,
-    spacing=3.0,
     init_params=(
         x1=5, y1=5, z1=-25, r1=57.5, theta1=0.35, phi1=0.65, z2=95, s2=29, eta2=0.45
     ),
