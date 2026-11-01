@@ -38,7 +38,7 @@ Float64 fits are bit-identical across sessions and thread counts. Float32 fits a
 
 ## Known issue: Float32 fits can stop early (found 2026-10-28, accepted 2026-10-29)
 
-In Float32 (the default `dtype` until 2026-10-29, now an option), BFGS can stop before the gradient reaches `tol`, and the fit still reports `Success`. Optim.jl also stops when the loss is unchanged in two successive iterations (|f − f′| ≤ `f_reltol`·|f| with `f_reltol = 0`), and near the optimum a Float32 loss stops changing. Found while porting LocMoFitPy, whose float32 fits of the same tutorial sites reach the float64 optimum:
+In Float32 (the default `dtype` until 2026-10-29, now an option), BFGS can stop before the gradient reaches `tol`, and the fit still reports `Success`. Optim.jl also stops when the loss is unchanged in two successive iterations (|f − f′| ≤ `f_reltol`·|f| with `f_reltol = 0`), and near the optimum a Float32 loss stops changing. Found while porting LocMoFitPy, whose float32 fits later showed the same early stops:
 
 | Tutorial site (moved start) | Float32 iterations (Float64) | largest gradient component at the stop | loss above the Float64 optimum, per localization | largest parameter error |
 | --- | --- | --- | --- | --- |

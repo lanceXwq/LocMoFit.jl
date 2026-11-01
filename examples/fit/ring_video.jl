@@ -28,7 +28,7 @@ include("../plotting/plotting functions.jl")
 generate_video(;
     data=locs,
     model=fit.model,
-    unitmodel=fit.unit_points,
+    unitmodel=fit.unit_model,
     ground_truth=ground_truth,
     states=fit.history.parameters,
     losses=fit.history.losses,

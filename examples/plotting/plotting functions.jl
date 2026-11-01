@@ -24,7 +24,7 @@ function generate_video(;
     ax3 = Axis(
         fig[1, 3];
         title="Loss over iterations (BFGS)",
-        xlabel="Epoch",
+        xlabel="Iteration",
         ylabel="Loss",
         yscale=log10,
     )
@@ -40,8 +40,6 @@ function generate_video(;
         )
     end
     s2 = scatter!(ax1, positions_observable)
-    # lims = extrema(data[1:3, :], dims=2)
-    # limits!(ax1, 1.2 .* lims[1]..., 1.2 .* lims[2]..., 1.2 .* lims[3]...)
     if !isnothing(ground_truth)
         Legend(
             fig[0, 1],
@@ -66,13 +64,10 @@ function generate_video(;
         )
     end
     scatter!(ax2, positions_observable)
-    # wireframe!(ax2, xs, ys, zs)
-    # limits!(ax2, 1.2 .* lims[1]..., 1.2 .* lims[2]..., 1.2 .* lims[3]...)
 
     scatterlines!(ax3, loss_points; markersize=4)
     limits!(ax3, 0, length(losses), minimum(losses), maximum(losses) * 1.1)
 
-    # Label(fig[0, :], text="Adam", fontsize=15)
     rowsize!(fig.layout, 0, Relative(0.05))
     record(fig, filename, 1:length(losses); framerate=framerate) do i
         epoch[] = i

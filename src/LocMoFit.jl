@@ -2,7 +2,6 @@ module LocMoFit
 
 using LinearAlgebra
 using ComponentArrays: ComponentVector
-using Statistics: mean
 
 using Enzyme
 using Enzyme: EnzymeRules, Annotation
@@ -193,7 +192,7 @@ Fit `model` to one site's localizations by maximizing the posterior of derivatio
 - `freeze`: names of the parameters kept at their starting values (for the orientation, `vx` and `vy`).
 - `tie`: pairs `target => source`, such as `:r2 => :r1`: the target takes the source's value throughout.
 - `max_iter`: the most iterations the optimizer takes.
-- `tol`: the fit has converged when no component of the gradient of [`loss`](@ref) exceeds `tol`. The default, 1e-4, leaves the parameters much closer to the optimum than their statistical error (a position within about 0.005 nm for a ring of 100 localizations, whose error is about 0.7 nm) and is reachable in `Float32`.
+- `tol`: the fit has converged when no component of the gradient of [`loss`](@ref) exceeds `tol`. The default, 1e-4, leaves the parameters much closer to the optimum than their statistical error (a position within about 0.005 nm for a ring of 100 localizations, whose error is about 0.7 nm).
 - `spacing`: the distance between model points, in nm. The points are generated once, from the starting values, and stay fixed during the fit.
 - `dtype`: the floating-point type of the fit, `Float64` by default. `Float32` is faster on large models (a cap fit 1.6×) but can stop early, before the gradient reaches `tol` (a known issue: NOTES.md).
 - `background`: whether some localizations are background, uniform over the field of view; their share is 1 − logistic(`logit_prob`), fitted from 0.1.

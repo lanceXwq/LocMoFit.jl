@@ -1,7 +1,3 @@
-# const SPCAP_PARAMS = (:x, :y, :z, :c, :α, :θ, :ϕ)
-# paramnames(::SphericalCap) = SPCAP_PARAMS
-abstract type ModelParams{T} end
-
 """
     Model
 
@@ -24,7 +20,8 @@ A model of one shape. It defines only the shape, in its own frame (with its refe
 - `shape_parameters(model, T)`: the shape's parameters and their defaults (e.g. a ring's radius `r`);
 - `unit_points(model, shape; spacing)`, with `shape` holding (at least) the shape parameters;
 - `local_points(model, unit_points, shape)`: the `3×M` points in the model's own frame;
-- `shape_penalty(model, shape)`.
+- `shape_penalty(model, shape)`;
+- `shape_summary(model, shape)`: the shape's size and shape in the usual terms (e.g. a cap's radius and area), which [`components`](@ref) reports.
 
 The pose places it: the position `x`, `y`, `z` of its reference point and its axis, given by the coordinates `vx`, `vy` of a tangent chart centered on the starting axis ([`chart_rotation`](@ref)): `vx = vy = 0` is the starting axis, which `run_locmofit` takes as `theta`, `phi` (polar angle and azimuth) from `init_params`. Its parameters are `(x, y, z, shape..., vx, vy, sigma)`.
 """
@@ -69,8 +66,6 @@ function apply_init(default::NamedTuple, init::NamedTuple)
     init_keys = keys(init)
     isempty(init_keys) && return default
 
-    init_set = Set(init_keys)
-
     unknown = Tuple(k for k in init_keys if !(k in allowed))
     if !isempty(unknown)
         @warn "Ignoring unknown init keys" unknown = unknown allowed = allowed
@@ -79,34 +74,11 @@ function apply_init(default::NamedTuple, init::NamedTuple)
     vals = ntuple(length(allowed)) do i
         k = allowed[i]
         old = getproperty(default, k)
-        k in init_set || return old
-
+        haskey(init, k) || return old
         new = getproperty(init, k)
-
-        if old isa Number
-            new isa Number ||
-                throw(ArgumentError("init[$k] must be a Number; got $(typeof(new))"))
-            return convert(typeof(old), new)
-        elseif old isa AbstractArray
-            new isa AbstractArray || throw(
-                ArgumentError("init[$k] must be an AbstractArray; got $(typeof(new))")
-            )
-            size(new) == size(old) || throw(
-                ArgumentError(
-                    "init[$k] has wrong size: expected $(size(old)), got $(size(new))"
-                ),
-            )
-
-            out = similar(old, eltype(old), axes(old))
-            out .= new
-            return out
-        else
-            throw(
-                ArgumentError(
-                    "default[$k] must be Number or AbstractArray; got $(typeof(old))"
-                ),
-            )
-        end
+        new isa Number ||
+            throw(ArgumentError("init[$k] must be a Number; got $(typeof(new))"))
+        return convert(typeof(old), new)
     end
 
     return NamedTuple{allowed}(vals)

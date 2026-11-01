@@ -1,5 +1,3 @@
-# const VecOrTupleAnyN{T} = Union{AbstractVector{T},Tuple{Vararg{T}}}
-
 function rotmat(θ::T, ϕ::T) where {T}
     sθ, cθ = sincos(θ)
     sϕ, cϕ = sincos(ϕ)
@@ -10,52 +8,6 @@ function rotmat(θ::T, ϕ::T) where {T}
         -sθ*cϕ -sθ*sϕ cθ
     ]
 end
-
-function rotmat(θ::AbstractVector{T}, ϕ::AbstractVector{T}) where {T}
-    sθ, cθ = sin.(θ), cos.(θ)
-    sϕ, cϕ = sin.(ϕ), cos.(ϕ)
-    t = one(T) .- cθ
-
-    a11 = one(T) .- t .* cϕ .* cϕ
-    a12 = .-t .* sϕ .* cϕ
-    a13 = sθ .* cϕ
-
-    a21 = .-t .* sϕ .* cϕ
-    a22 = one(T) .- t .* sϕ .* sϕ
-    a23 = sθ .* sϕ
-
-    a31 = .-sθ .* cϕ
-    a32 = .-sθ .* sϕ
-    a33 = cθ
-
-    # 3×3 array on the same device as θ/ϕ
-    return vcat(hcat(a11, a12, a13), hcat(a21, a22, a23), hcat(a31, a32, a33))
-end
-
-# function rodrigues(ax, ay, az, theta, eps: float = 1e-10):
-#     # Normalize axis
-#     norm = torch.sqrt(ax**2 + ay**2 + az**2).clamp_min(eps)
-#     x = ax / norm
-#     y = ay / norm
-#     z = az / norm
-
-#     c = torch.cos(theta)
-#     s = torch.sin(theta)
-#     C = 1 - c
-
-#     return torch.stack(
-#         [
-#             torch.stack([c + x * x * C, x * y * C - z * s, x * z * C + y * s], dim=-1),
-#             torch.stack([y * x * C + z * s, c + y * y * C, y * z * C - x * s], dim=-1),
-#             torch.stack([z * x * C - y * s, z * y * C + x * s, c + z * z * C], dim=-1),
-#         ],
-#         dim=-2,
-#     ).squeeze_(0)
-# end
-
-# rotmat(θ::T, ϕ::T) where {T} = rotmat(θ, ϕ)
-# isapprox(θ, 0, atol=1e-10) ? RotZ(ϕ) : rodrigues(θ, ϕ)
-# AngleAxis(θ, -sin(ϕ), cos(ϕ), 0)
 
 """
     chart_rotation(R₀, vx, vy)
@@ -76,39 +28,3 @@ end
 
 # rotate the points X (3×M) by R, then shift them by (x, y, z); returns new points
 place(X::AbstractMatrix, R::AbstractMatrix, x, y, z) = R * X .+ [x, y, z]
-# if isapprox(θ, 0, atol=1e-10) && isapprox(ϕ, 0, atol=1e-10)
-#     trans!(X, Δ𝐱)
-# else
-#     X .= muladd(rotmat(θ, ϕ), X, Δ𝐱)
-# end
-
-# function unit_sphere_to_cap(sphere_pts::AbstractMatrix{T}, half_angle::AbstractVector{T}) where {T}
-#     x = sphere_pts[1, :]
-#     y = sphere_pts[2, :]
-#     z = sphere_pts[3, :]
-
-#     ca = @. cos(half_angle)
-#     a = @. (1 + ca) / 2
-#     b = @. (1 - ca) / 2
-
-#     cap_pts = similar(sphere_pts)
-#     cap_pts[3, :] .= muladd.(b, z, a)
-
-#     r1 = sqrt.(x .^ 2 .+ y .^ 2)
-#     r2 = sqrt.(1 .- view(cap_pts, 3, :) .^ 2)
-#     s = r2 ./ r1
-
-#     cap_pts[1, :] .= x .* s
-#     cap_pts[2, :] .= y .* s
-#     return cap_pts
-# end
-
-# function unit_ring_to_arc(ring_pts::AbstractMatrix{T}, half_angle::T) where {T}
-#     iseven(size(ring_pts, 2)) || (@warn "Even number of points for unit_ring_to_arc is risky" maxlog = 2)
-#     φ = asin.(view(ring_pts, 1, :)) .* (half_angle / π)
-#     arc_pts = similar(ring_pts)
-#     arc_pts[1, :] .= sin.(φ)
-#     arc_pts[2, :] .= cos.(φ)
-#     arc_pts[3, :] .= 0
-#     return arc_pts
-# end

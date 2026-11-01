@@ -8,7 +8,7 @@ LocMoFit.jl and its JAX port LocMoFitPy re-implement the fitting core of the ori
 
 LocMoFit.jl and LocMoFitPy are meant to behave identically, so "the ports" means both, unless a row says otherwise. Since 2026-10-28 LocMoFitPy has LocMoFit.jl's features and gives the same fits (`../LocMoFitPy/JULIA_DIFFERENCES.md`); "LocMoFit.jl" in a row below then holds for LocMoFitPy too.
 
-The comparison is against SMAP commit `d750f5ac` (2026-09-01); LocMoFit itself last changed in `d066594d` (2026-08-28). Status as of 2026-10-25:
+The comparison is against SMAP commit `d750f5ac` (2026-09-01); LocMoFit itself last changed in `d066594d` (2026-08-28). Status as of 2026-11-01:
 
 - **planned**: decided, not yet implemented;
 - **open**: not decided;
@@ -19,7 +19,7 @@ The comparison is against SMAP commit `d750f5ac` (2026-09-01); LocMoFit itself l
 
 | Topic | MATLAB LocMoFit | LocMoFit.jl / LocMoFitPy | Status |
 | --- | --- | --- | --- |
-| Signal term | Gaussian mixture over the model points. Each localization has its own diagonal covariance. Points carry weights n, and the mixture is normalized by Σn. | The same mixture without point weights. LocMoFit.jl normalizes it (the mean over each component's points, the components weighted by their shares; `derivations/derivation.qmd`); | — |
+| Signal term | Gaussian mixture over the model points. Each localization has its own diagonal covariance. Points carry weights n, and the mixture is normalized by Σn. | The same mixture without point weights. LocMoFit.jl normalizes it (the mean over each component's points, the components weighted by their shares; `derivations/derivation.qmd`). | — |
 | Background | Uniform background per layer, p = (1 − b)·f + b·U. The weight b is fitted in [0.001, 0.999], or reparametrized as a density in localizations/µm². U is the inverse of a fixed volume set by the ROI size d: in 3D a cylinder of diameter d and height d, U = 1/(π(d/2)²·d); in 2D a disc, U = 1/(π(d/2)²). | LocMoFit.jl: p = π·f + (1 − π)/V as in DynMoFit, with π = logistic(`logit_prob`) fitted, a Beta prior on π (default Beta(5, 2): mode 0.8, worth 5 localizations) and V the volume (area in 2D) of the field of view, `fov_volume` (default: the localizations' bounding box). | done |
 | Blur (`variation` / `sigma`) | Added to each precision in quadrature, √(s² + v²), starting (fixed) at 0. | LocMoFit.jl: in quadrature, starting at 1 nm, since the likelihood is stationary in σ at 0. | done |
 | Precision floor | For all but `'discrete'` models, precisions below the median are raised to the median (advanced setting `minSigma`). | Every localization keeps its own precision. | by design |
@@ -99,7 +99,7 @@ The MATLAB folder also has 12 unlisted models (`cylinder3D`, line segments, `sim
 | Background density and background-free localization count | yes | the signal fraction (`signal_fraction`), from which both follow | — |
 | Expected log-likelihood and z-score (from 1,000 simulations of the fitted model); an "overfitted" control (the localizations as the model) | optional | no | open |
 | Confidence intervals | optional; see issue 11 | no | open |
-| Derived parameters per model (radius, curvature, area, …) | `getDerivedPars` | no | open |
+| Derived parameters per model (radius, curvature, area, …) | `getDerivedPars` | yes: each component's shape in `components` (a ring's `r`; a cap's `s`, `kappa`, `curvature`, `radius`, `alpha`, `area`) | done |
 | Optimization history | optional, for playback in the viewer | LocMoFit.jl: the loss and the parameters per iteration, with `history=true`. | — |
 | Model points | for plotting | returned | — |
 
