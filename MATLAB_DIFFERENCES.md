@@ -113,7 +113,7 @@ The MATLAB version runs inside SMAP, which provides:
 - galleries and cross-site summary plots;
 - simulation of sites from a LocMoFit model (`SimulateSites`, with SMAP's photophysics).
 
-The ports are libraries that fit one site per call. Calling them from SMAP (`LocMoFitPy/run_locmofit.m`, `LocMoFit.jl/jlbridge.py`) and from SMAPpy is separate work. In this workspace, SimSMLM simulates the test data.
+The ports are libraries that fit one site per call. Calling them from SMAP (`LocMoFitPy/run_locmofit.m`, `LocMoFit.jl/jlbridge.py`) and from SMAPpy is separate work. In this workspace, DynMoSim simulates the test data.
 
 SMAP's `WeiMoFit` plugin (`plugins/+ROIManager/+Evaluate/WeiMoFit.m`, 2026-02-24) calls LocMoFitPy through `pyenv`. It expects the old folder `../LocMoFitPy2/` and a `matlab_api` module, neither of which exists in the current package.
 

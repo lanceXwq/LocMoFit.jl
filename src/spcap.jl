@@ -1,7 +1,7 @@
 """
     SphericalCap()
 
-A spherical cap of constant area 4πs², with its apex at its position `(x, y, z)` and its outward normal along its axis. Its dimensionless curvature is κ′ = tanh(`eta`) = curvature × `s`: 0 is a flat disc of radius 2s, ±1 the whole sphere of radius s, and a negative κ′ bends the other way. The sphere's radius is s/κ′ and the half-angle from the axis to the rim, seen from the sphere's center, is acos(1 − 2κ′²) (derivations/derivation.qmd). This is SimSMLM's `Bend`, and the cap MATLAB LocMoFit parametrizes by its surface area and close angle.
+A spherical cap of constant area 4πs², with its apex at its position `(x, y, z)` and its outward normal along its axis. Its dimensionless curvature is κ′ = tanh(`eta`) = curvature × `s`: 0 is a flat disc of radius 2s, ±1 the whole sphere of radius s, and a negative κ′ bends the other way. The sphere's radius is s/κ′ and the half-angle from the axis to the rim, seen from the sphere's center, is acos(1 − 2κ′²) (derivations/derivation.qmd). This is DynMoSim's `Bend`, and the cap MATLAB LocMoFit parametrizes by its surface area and close angle.
 """
 struct SphericalCap <: SimpleModel end
 

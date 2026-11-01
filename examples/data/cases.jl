@@ -1,17 +1,15 @@
-# The simulated sites behind LocMoFit.jl's tutorial data (examples/data/generate.jl) and its accuracy benchmark (benchmarks/accuracy/generate.jl): for each model, the true parameters in LocMoFit's parametrization, the same structure built for SimSMLM, and the acquisition. Lengths in nm, angles in radians. Each axis is given as θ, ϕ (polar angle and azimuth; a composite's second axis in the first one's frame), which is how LocMoFit takes a starting axis. Needs SimSMLM (and StaticArrays).
-using SimSMLM, StaticArrays, LinearAlgebra, Random
+# The simulated sites behind LocMoFit.jl's tutorial data (examples/data/generate.jl) and its accuracy benchmark (benchmarks/accuracy/generate.jl): for each model, the true parameters in LocMoFit's parametrization, the same structure built for DynMoSim, and the acquisition. Lengths in nm, angles in radians. Each axis is given as θ, ϕ (polar angle and azimuth; a composite's second axis in the first one's frame), which is how LocMoFit takes a starting axis. Needs DynMoSim (and StaticArrays).
+using DynMoSim, StaticArrays, LinearAlgebra, Random
 
 direction(θ, ϕ) = SA[sin(θ) * cos(ϕ), sin(θ) * sin(ϕ), cos(θ)]
 # the minimal rotation taking z to direction(θ, ϕ), which is LocMoFit's rotmat(θ, ϕ)
 rot(θ, ϕ) = θ == 0 ? SMatrix{3,3,Float64}(I) : rotation(direction(θ, ϕ))
 
-# SimSMLM's constant-area cap with scale s and dimensionless curvature κ is LocMoFit's cap with scale s and κ′ = tanh(eta)
+# DynMoSim's constant-area cap with scale s and dimensionless curvature κ is LocMoFit's cap with scale s and κ′ = tanh(eta)
 function cap(apex, R, s, κ)
-    return Structure(
-        SphereSurface{3}(), Similarity{3}(; scale=s, rot=R, shift=apex) ∘ Bend(κ)
-    )
+    return Structure(SphereSurface(), Similarity(; scale=s, rot=R, shift=apex) ∘ Bend(κ))
 end
-ring(center, R, r) = Structure(Ring{3}(), Similarity{3}(; scale=r, rot=R, shift=center))
+ring(center, R, r) = Structure(Ring(), Similarity(; scale=r, rot=R, shift=center))
 
 ring_structure(p) = ring(SA[p.x, p.y, p.z], rot(p.theta, p.phi), p.r)
 spcap_structure(p) = cap(SA[p.x, p.y, p.z], rot(p.theta, p.phi), p.s, tanh(p.eta))
@@ -123,10 +121,10 @@ const CASES = (
 )
 
 # acquisition: shot-noise-limited precision (PSF σ 150 nm laterally, 2.5× axially; 500 photons per event on average), and the background filling the site's field of view, a 300 nm cube (SMAP's default ROI size)
-const OPTICS = Optics(; uncertainty=ShotNoise{3}(150.0), brightness=5e4, ontime=0.01)
+const OPTICS = Optics(; uncertainty=ShotNoise(150.0), brightness=5e4, ontime=0.01)
 const FOV = FieldOfView(SA[-150.0, -150.0, -150.0], SA[150.0, 150.0, 150.0])
 
-# one site of `case`, over one second of acquisition (so the rates are mean counts)
+# one site of `case`, over one second of acquisition (so the rates are mean counts): DynMoSim's localizations and truth
 function simulate_site(rng, case; background=true)
     bg = if background
         Background(;
@@ -137,7 +135,7 @@ function simulate_site(rng, case; background=true)
     else
         nothing
     end
-    locs, truth = simulate(
+    return simulate(
         rng,
         case.structure(case.truth);
         emis_rate=case.nsignal,
@@ -145,7 +143,6 @@ function simulate_site(rng, case; background=true)
         optics=OPTICS,
         background=bg,
     )
-    return smaptable(locs), smaptable(truth)
 end
 
 function writecsv(path, table)
