@@ -553,4 +553,43 @@ end
     @test sum(t.weights) ≈ 1 && length(t.weights) == 2
 end
 
+@testset "point_params" begin
+    # the number of points comes from point_params (ceil(2πr/spacing) for a ring, ceil(4πs²/spacing²) for a cap); the starting values from init_params, frozen or not
+    (_, model, θ, starts) = CASES[1]
+    locs, precs = test_data(model, θ, starts; every=3)
+    npoints(p) =
+        map(u -> size(u.points, 2), p.unit_model isa Tuple ? p.unit_model : (p.unit_model,))
+    p80, u80 = fit_problem(Ring(), locs, precs; init_params=(r=80.0,), spacing=3.0)
+    p50, u50 = fit_problem(
+        Ring(), locs, precs; init_params=(r=80.0,), point_params=(r=50.0,), spacing=3.0
+    )
+    @test npoints(p80) == (ceil(Int, 2π * 80 / 3),)
+    @test npoints(p50) == (ceil(Int, 2π * 50 / 3),)
+    @test u50 == u80 && u50.r == 80
+    pf, uf = fit_problem(
+        Ring(),
+        locs,
+        precs;
+        init_params=(r=80.0,),
+        freeze=(:r,),
+        point_params=(r=50.0,),
+        spacing=3.0,
+    )
+    @test npoints(pf) == (ceil(Int, 2π * 50 / 3),) &&
+        full_parameters(uf, pf.parameter_map).r == 80
+    pc, _ = fit_problem(SphericalCap(), locs, precs; point_params=(s=30.0,), spacing=3.0)
+    @test npoints(pc) == (ceil(Int, 4π * 30^2 / 3^2),)
+    # with a tie, the target's points follow the source's value
+    pd, ud = fit_problem(
+        DoubleRing(),
+        locs,
+        precs;
+        init_params=(r1=70.0,),
+        tie=(:r2 => :r1,),
+        point_params=(r1=40.0,),
+        spacing=3.0,
+    )
+    @test npoints(pd) == (ceil(Int, 2π * 40 / 3), ceil(Int, 2π * 40 / 3)) && ud.r1 == 70
+end
+
 include("fit.jl")

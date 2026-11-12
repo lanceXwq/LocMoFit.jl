@@ -24,8 +24,8 @@ export Ring, SphericalCap, Composite, DoubleRing, SpCapRing, run_locmofit
 const BFGS_BACKTRACKING = BFGS(; linesearch=Optim.LineSearches.BackTracking())
 
 """
-    fit_problem(model, locs, loc_precisions; init_params, freeze, tie, spacing, dtype, background, fov_volume,
-                signal_prior) -> (p, u₀)
+    fit_problem(model, locs, loc_precisions; init_params, freeze, tie, spacing, point_params, dtype, background,
+                fov_volume, signal_prior) -> (p, u₀)
 
 Everything a fit needs: `p` for [`loss`](@ref) and the free parameters `u₀` to start from. The keywords are those of [`run_locmofit`](@ref).
 """
@@ -37,6 +37,7 @@ function fit_problem(
     freeze=(),
     tie=(),
     spacing::Real=3.0,
+    point_params::NamedTuple=NamedTuple(),
     dtype::Type{<:AbstractFloat}=Float64,
     background::Bool=true,
     fov_volume::Union{Nothing,Real}=nothing,
@@ -71,7 +72,15 @@ function fit_problem(
     θ₀ = apply_init(θ₀, Base.structdiff(init_params, NamedTuple{axis_names}))
     pmap = ParameterMap(θ₀, freeze_names(freeze), tie_pairs(tie))
     θ₀ = full_parameters(free_parameters(θ₀, pmap), pmap)      # with the ties applied
-    unit = unit_model(model, θ₀, starts; spacing)
+    # the values the points are generated from: point_params in place of the starting values, with the ties applied
+    θpoints = if isempty(point_params)
+        θ₀
+    else
+        θp = apply_init(θ₀, point_params)
+        mp = ParameterMap(θp, freeze_names(freeze), tie_pairs(tie))
+        full_parameters(free_parameters(θp, mp), mp)
+    end
+    unit = unit_model(model, θpoints, starts; spacing)
 
     locsT = locs isa Array{dtype} ? locs : Array{dtype}(locs)
     V = if fov_volume === nothing
@@ -182,8 +191,8 @@ function objective(p, u₀)
 end
 
 """
-    run_locmofit(model, locs, loc_precisions; init_params, freeze, tie, max_iter, tol, spacing, dtype, background,
-                 fov_volume, signal_prior, history)
+    run_locmofit(model, locs, loc_precisions; init_params, freeze, tie, max_iter, tol, spacing, point_params, dtype,
+                 background, fov_volume, signal_prior, history)
 
 Fit `model` to one site's localizations by maximizing the posterior of derivations/derivation.qmd: a mixture of the structure and a uniform background, with a Beta prior on the signal fraction, by BFGS with a backtracking line search (gradients by Enzyme). `model` is a [`Model`](@ref), such as `Ring()` or `Composite(Ring(), SphericalCap())`, or the name of a function in LocMoFit that returns one, such as `"Ring"` or `"DoubleRing"`. A fit runs on one thread. Fitting many sites in threads (`Threads.@threads`) is much faster, but has rarely crashed Julia with memory corruption, for reasons not yet known; separate processes are safe.
 
@@ -194,6 +203,7 @@ Fit `model` to one site's localizations by maximizing the posterior of derivatio
 - `max_iter`: the most iterations the optimizer takes.
 - `tol`: the fit has converged when no component of the gradient of [`loss`](@ref) exceeds `tol`. The default, 1e-4, leaves the parameters much closer to the optimum than their statistical error (a position within about 0.005 nm for a ring of 100 localizations, whose error is about 0.7 nm).
 - `spacing`: the distance between model points, in nm. The points are generated once, from the starting values, and stay fixed during the fit.
+- `point_params`: values that replace the starting values only for generating the points (with the ties applied), such as `(r=50,)`: then the number of points comes from a ring of radius 50 nm, whatever the starting radius. Only the shape parameters that set the number of points matter: a ring's `r` and a cap's `s` (`r1`, `s2`, … in a composite). Unknown names are ignored with a warning.
 - `dtype`: the floating-point type of the fit, `Float64` by default. `Float32` is faster on large models (a cap fit 1.6×) but can stop early, before the gradient reaches `tol` (a known issue: NOTES.md).
 - `background`: whether some localizations are background, uniform over the field of view; their share is 1 − logistic(`logit_prob`), fitted from 0.1.
 - `fov_volume`: the volume (area, in 2D) of the field of view the localizations were selected from, in nm³ (nm²). Without it, the bounding box of the localizations is used, which is a little smaller.
