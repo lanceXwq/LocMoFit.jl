@@ -1,131 +1,117 @@
-from typing import Any, Mapping, Optional, Tuple
+"""LocMoFit.jl's `run_locmofit` for Python (and MATLAB, through `pyenv`), called through juliacall, with the arguments and the return value of LocMoFitPy's `run_locmofit`, so that a caller can switch between the two by changing the import.
+
+juliacall needs a Julia environment that has LocMoFit and PythonCall at juliacall's own version. LocMoFit.jl's environment has both, once the two versions agree (update the older one: `Pkg.update("PythonCall")` there, or juliacall). Point juliacall at it before importing this module:
+
+    PYTHON_JULIACALL_EXE=julia PYTHON_JULIACALL_PROJECT=<LocMoFit.jl folder> python ...
+
+Importing the module starts Julia and loads LocMoFit (a few seconds); the first fit of a session compiles (40–50 s; NOTES.md, Using LocMoFit.jl from SMAPpy).
+"""
+
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 import numpy as np
+from juliacall import AnyValue, ArrayValue
 from juliacall import Main as jl
 
 jl.seval("using LocMoFit")
 
-
-def normalize_dtype(dtype):
-    if dtype in ("float32", "fp32"):
-        return jl.Float32
-    if dtype in ("float64", "fp64"):
-        return jl.Float64
-    return dtype
-
-
-def _dict_to_namedtuple(d: dict):
-    # Returns a Julia NamedTuple value, e.g. (; z=53.0, s=60.0)
-    if not d:
-        return jl.seval("(;)")
-    # Stable order (optional but nice)
-    items = sorted(d.items(), key=lambda kv: kv[0])
-
-    # Bind values into Julia Main as temporary variables
-    tmp_names = []
-    for k, v in items:
-        vn = f"__init_{k}"
-        setattr(jl, vn, v)  # julia Main.__init_k = v
-        tmp_names.append((k, vn))
-
-    expr = "(; " + ", ".join(f"{k}={vn}" for k, vn in tmp_names) + ")"
-    nt = jl.seval(expr)
-    return nt
-
-
-def _normalize_freeze(freeze):
-    """
-    Accept:
-      - () / [] / None
-      - "z"                     (single string)
-      - ("x", "z")              (tuple/list of strings)
-      - (jl.Symbol("z"), ...)   (already-symbols)
-    Return:
-      - Julia tuple of Symbols: (:x, :z)
-    """
-    if freeze is None:
-        return jl.seval("()")
-
-    # If MATLAB passes "z", Python sees a str
-    if isinstance(freeze, str):
-        names = [freeze]
-    else:
-        names = list(freeze)
-
-    # Convert each entry to Julia Symbol
-    syms = []
-    for x in names:
-        if isinstance(x, str):
-            syms.append(jl.Symbol(x))
-        else:
-            # assume it's already a Julia Symbol (or convertible)
-            syms.append(x)
-
-    # a Julia Tuple (not a Python tuple), to satisfy Tuple{Vararg{Symbol}}
-    return jl.tuple(*syms)
-
-
-def _normalize_tie(tie):
-    """
-    Accept a mapping {"r2": "r1"} or pairs [("r2", "r1")], each target => source.
-    Return a Julia tuple of Symbol pairs: (:r2 => :r1,)
-    """
-    if not tie:
-        return jl.seval("()")
-    items = tie.items() if isinstance(tie, Mapping) else tie
-    return jl.tuple(
-        *[
-            jl.Pair(jl.Symbol(str(target)), jl.Symbol(str(source)))
-            for target, source in items
-        ]
-    )
+_namedtuple = jl.seval(
+    "(names, values) -> NamedTuple{Tuple(Symbol.(names))}(Tuple(values))"
+)
+_matrix = jl.seval("x -> Matrix{Float64}(x)")
+_numeric = jl.seval("x -> x isa AbstractArray{<:Real}")
+_DTYPES = {np.dtype("float64"): jl.Float64, np.dtype("float32"): jl.Float32}
 
 
 def run_locmofit(
-    model_name: str,
-    locs: np.ndarray,
-    loc_precisions: np.ndarray,
+    model: str,
+    locs,
+    loc_precisions,
     *,
-    init_params: Optional[Mapping[str, Any]] = None,
-    freeze: Tuple[str, ...] = (),
-    tie: Any = None,
-    spacing: float = 3.0,  # 3 nm
+    init_params: Mapping[str, float] | None = None,
+    freeze: str | Sequence[str] = (),
+    tie: Mapping[str, str] | Sequence[tuple[str, str]] | None = None,
     max_iter: int = 200,
     tol: float = 1e-4,
-    dtype: str = "float64",
+    spacing: float = 3.0,
+    point_params: Mapping[str, float] | None = None,
+    dtype: Any = "float64",
     background: bool = True,
-    fov_volume: Optional[float] = None,
-    signal_prior: Any = (5, 2),
+    fov_volume: float | None = None,
+    signal_prior: tuple[float, float] | None = (5, 2),
     history: bool = False,
-):
-    init_params = _dict_to_namedtuple(dict(init_params or {}))
-    freeze_syms = _normalize_freeze(freeze)
-    fit = jl.LocMoFit.run_locmofit(
-        model_name,
-        locs,
-        loc_precisions,
-        max_iter=max_iter,
-        tol=tol,
-        init_params=init_params,
-        spacing=spacing,
-        freeze=freeze_syms,
-        tie=_normalize_tie(tie),
-        dtype=normalize_dtype(dtype),
-        background=background,
-        fov_volume=fov_volume,
+) -> dict[str, Any]:
+    """Fit `model` to one site's localizations with LocMoFit.jl. The arguments and the returned dict are those of LocMoFitPy's `run_locmofit` (its docstring describes them): `locs` and `loc_precisions` are (N, D), and `model_points` is (M, 3). Only `model` differs: the name of a LocMoFit.jl model, spelled exactly (`"Ring"`, `"SphericalCap"`, `"DoubleRing"`, `"SpCapRing"`); model objects, other cases and aliases are LocMoFitPy's only."""
+    dtype = np.dtype(dtype)
+    if dtype not in _DTYPES:
+        raise ValueError(f"dtype must be float64 or float32, not {dtype}")
+    locs = np.asarray(locs, dtype=np.float64)
+    loc_precisions = np.asarray(loc_precisions, dtype=np.float64)
+    if loc_precisions.shape != locs.shape:
+        raise ValueError(
+            f"loc_precisions must match locs shape; got {loc_precisions.shape} vs {locs.shape}"
+        )
+    if isinstance(tie, Mapping):
+        tie = tie.items()
+    fit = jl.run_locmofit(
+        model,
+        _matrix(locs.T),  # LocMoFit.jl takes D×N
+        _matrix(loc_precisions.T),
+        init_params=_named(init_params),
+        freeze=(freeze,) if isinstance(freeze, str) else tuple(freeze),
+        tie=tuple((str(t), str(s)) for t, s in tie or ()),
+        max_iter=int(max_iter),
+        tol=float(tol),
+        spacing=float(spacing),
+        point_params=_named(point_params),
+        dtype=_DTYPES[dtype],
+        background=bool(background),
+        fov_volume=None if fov_volume is None else float(fov_volume),
         signal_prior=(
-            jl.tuple(*signal_prior) if signal_prior is not None else None
+            None
+            if signal_prior is None
+            else tuple(float(v) for v in signal_prior)
         ),
-        history=history,
+        history=bool(history),
     )
-    # history is Julia's `nothing` unless history=True; then it holds `losses` and `parameters`, one per iteration
+    hist = None
+    if history:
+        thetas = _python(fit.history.parameters)
+        hist = {
+            "losses": np.array(fit.history.losses, dtype=float),
+            "parameters": {
+                k: np.array([t[k] for t in thetas]) for k in thetas[0]
+            },
+        }
+    # LocMoFit.jl's weights are a tuple and its model points 3×M
     return {
-        "parameters": fit.parameters,
+        "parameters": _python(fit.parameters),
         "signal_fraction": fit.signal_fraction,
-        "weights": fit.weights,
-        "components": fit.components,
-        "loss": fit.loss,
-        "model_points": fit.model_points,
-        "result": fit.result,
-        "history": fit.history,
+        "weights": np.array(fit.weights, dtype=float),
+        "components": _python(fit.components),
+        "loss": float(fit.loss),
+        "model_points": _python(fit.model_points).T,
+        "iterations": int(fit.result.stats.iterations),
+        "retcode": str(jl.string(fit.result.retcode)),
+        "history": hist,
     }
+
+
+def _named(values: Mapping[str, float] | None):
+    """Names and numbers as a Julia NamedTuple."""
+    values = dict(values or {})
+    return _namedtuple(tuple(values), tuple(float(v) for v in values.values()))
+
+
+def _python(x):
+    """A value of LocMoFit.jl's result as LocMoFitPy gives it: a NamedTuple as a dict, a tuple or vector of them as a list, an array as a NumPy array of floats. Numbers, strings, tuples and `nothing` arrive converted by juliacall."""
+    if isinstance(x, tuple):
+        return [_python(v) for v in x]
+    if isinstance(x, ArrayValue):
+        if _numeric(x):
+            return np.array(x, dtype=float)
+        return [_python(v) for v in x]
+    if isinstance(x, AnyValue) and jl.isa(x, jl.NamedTuple):
+        return {str(k): _python(v) for k, v in zip(jl.keys(x), x)}
+    return x

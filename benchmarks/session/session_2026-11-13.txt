@@ -1,0 +1,9 @@
+Julia 1.13.3, Apple M1 Pro, 1 thread(s)
+load: 2.5 s, peak memory 451 MB
+Ring 3D Float64            first fit  43.0 s, then    2.4 ms, peak memory 900 MB
+SphericalCap 3D Float64    first fit   5.4 s, then  205.8 ms, peak memory 900 MB
+DoubleRing 3D Float64      first fit   6.3 s, then   12.4 ms, peak memory 900 MB
+SpCapRing 3D Float64       first fit   5.8 s, then   82.4 ms, peak memory 971 MB
+Ring 2D Float64            first fit   0.2 s, then    1.7 ms, peak memory 971 MB
+Ring 3D Float32            first fit   6.4 s, then    3.2 ms, peak memory 971 MB
+total since start: 72.4 s

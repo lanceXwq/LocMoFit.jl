@@ -105,3 +105,47 @@ The axis was tilted up to 60° (rings, double rings) or 45° (caps, cap + ring),
 | SpCapRing, all free | 3 | 98 | 6.0° | 2.2 ms | 8.9 s | 40.6 s |
 
 The estimated axis was never more than 45° off. The 3 fits that missed from the estimated start had the second component free, and the same starts did not miss with it held coaxial; their cap's curvature started low (κ′ about 0.1 against 0.5–0.7), since the noise in ρ² flattens the parabola fitted to it.
+
+## Using LocMoFit.jl from SMAPpy (2026-11-13)
+
+**The question.** SMAPpy fits through LocMoFitPy, with the plugin LocMoFitPy ships. Calling LocMoFit.jl instead, through juliacall (`jlbridge.py`), would spare porting each new feature. What would it cost? Not adopted; recorded here for when the question comes back.
+
+**Time and memory**, measured with `benchmarks/session/session.jl` (`session_2026-11-13.txt`) and LocMoFitPy's `benchmarks/speed/session.py` (its `session_2026-11-13.txt`): fresh sessions, each model on its tutorial site, 3D float64 unless noted, Apple M1 Pro, one thread, LocMoFitPy without its persistent compilation cache. "Then" is the median of five fits after the first.
+
+| | LocMoFit.jl | LocMoFitPy |
+| --- | --- | --- |
+| Load or import | 2.5 s | 1.0 s |
+| Ring: first fit, then | 43.0 s, 2.4 ms | 1.6 s, 7.2 ms |
+| SphericalCap | 5.4 s, 206 ms | 1.6 s, 339 ms |
+| DoubleRing | 6.3 s, 12.4 ms | 1.8 s, 28.3 ms |
+| SpCapRing | 5.8 s, 82 ms | 2.0 s, 142 ms |
+| Ring 2D, after the 3D models | 0.2 s, 1.7 ms | 1.1 s, 6.2 ms |
+| Ring, Float32 | 6.4 s, 3.2 ms | 1.2 s, 4.9 ms |
+| All of the above, from the start of the session | 72 s | 13 s |
+| Peak memory | 0.97 GB | 0.56 GB |
+
+The first fit of a session compiles, with Enzyme, what all models share, and each later model or element type adds 5–6 s; the 2D ring reuses the 3D ring's code. LocMoFitPy compiles per model and size class, 1–2 s each, and its SMAPpy plugin keeps them on disk across sessions (LocMoFitPy's `NOTES.md`), so a repeat session compiles almost nothing, while LocMoFit.jl pays its 43 s again in every session. The times after the first fit are those of one site and changed by up to 40% between runs (an earlier run: the cap 222 ms here and 248 ms in LocMoFitPy); `benchmarks/speed/` measures them properly. With these, the 43 s are earned back after roughly 300–1,700 caps, 700–850 caps with a ring, 2,700–2,800 double rings or 9,000–10,500 rings (over the two runs), so on datasets of a few hundred sites LocMoFitPy finishes first.
+
+**A precompile workload does not cache the compilation.** A scratch package that depended on LocMoFit.jl and fitted the tutorial ring in a PrecompileTools workload:
+
+```julia
+module LocMoFitWarm
+using LocMoFit, PrecompileTools
+@compile_workload begin
+    locs, precs = site(ring_csv)   # the tutorial ring, D×N
+    run_locmofit("Ring", locs, precs)
+end
+end
+```
+
+precompiled in 38 s and loaded in 2.0 s, but the first fit in a new session then crashed with a segmentation fault, in both of two runs: Enzyme's compiled code, taken from the package image, does not run. Not tried: a system image (PackageCompiler, a new dependency). It would have to be rebuilt after every update of LocMoFit.jl, while the SMAPpy plugin updates itself from `main`.
+
+**Install.** Julia 1.13 takes 0.9 GB, and LocMoFit.jl's 146 packages (Enzyme, Optimization, SciMLBase, …) about 0.4 GB with their binaries and one precompiled cache each. How long a fresh install takes to precompile them was not measured. juliacall would be a new dependency of SMAPpy's environment; its JuliaPkg can download Julia itself.
+
+**Threads**, from juliacall's documentation, not tested. SMAPpy runs every plugin step in a `QThread`. juliacall can be called from any Python thread since version 0.9.22 (marked experimental) and holds the GIL during every call, so SMAPpy's Python side (the progress line, the Stop button) would wait for each fit and for the whole first compilation, unless the plugin calls through `_jl_call_nogil`, which requires that the Julia code not touch Python. JAX releases the GIL while it computes. With several Julia threads, juliacall recommends `PYTHON_JULIACALL_HANDLE_SIGNALS=yes`, since Julia's garbage collector otherwise crashes the process, and that keeps Ctrl-C from reaching Python.
+
+**Not tested:** Julia in SMAPpy's process, next to PySide6 and PyTorch. Julia and JAX ran in one process without trouble (macOS, the check of `jlbridge.py` below).
+
+**`jlbridge.py`** was rewritten on 2026-11-13 to take the arguments of LocMoFitPy's `run_locmofit`, including `point_params` and (N, D) localizations, and to return LocMoFitPy's dict, so that a caller switches by changing the import. Checked in one process against LocMoFitPy (scratch script; juliacall 0.9.37 on LocMoFit.jl's environment, its PythonCall updated to 0.9.37, and on a scratch environment with Enzyme 0.13.219, with the same results): on the five tutorial sites from the estimated start, the SpCapRing site from the moved start, and with `freeze`, `tie`, `point_params`, `fov_volume`, no prior, no background, `max_iter` and `history`, the two dicts had the same keys, types and shapes, and in Float64 the same iterations, return codes and values to 1e-10 (history included); Float32 fits differed by up to 0.25 nm, as Float32 fits of the two packages do (the known issue above). Importing the module took 5–6 s and the first fit 52 s. No test runs it, since CI has no juliacall.
+
+**What it would not save.** MATLAB calls LocMoFitPy (`LocMoFitPy/run_locmofit.m`), so LocMoFitPy, and its parity with LocMoFit.jl, stay unless MATLAB moves too.
