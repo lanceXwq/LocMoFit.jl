@@ -58,3 +58,38 @@ In Float32 (the default `dtype` until 2026-10-29, now an option), BFGS can stop 
 ## The signal prior (2026-10-28)
 
 The Beta prior on the signal fraction π keeps its mode at 0.8 (the owner's choice) but became flatter: Beta(5, 2), worth 5 localizations, instead of DynMoFit's Beta(197, 50), worth 245. On the benchmark's sites with 15% background, Beta(197, 50) pulled π by −0.025 to −0.033 (z down to −13); Beta(41, 11) by about −0.01 to −0.016; Beta(17, 5) by −0.004 to −0.009; Beta(5, 2) by at most 0.004, within its scatter of about 0.013. The geometry was the same under every prior. On data without background the fitted π went from 0.85–0.90 to 0.985–0.994 (truth 1). Beta(5, 2) still vanishes at π = 0 and 1, so π stays inside (0, 1) (`benchmarks/accuracy/prior_5_2_2026-10-28.txt`).
+
+## Starting values from the data (2026-11-12)
+
+**Why.** BFGS climbs to the maximum whose basin holds the start, and the posterior has others: for two rings, one at the axis perpendicular to theirs (`derivations/derivation.qmd`, Starting values from the data). From the fixed defaults (the center at the origin, the axis along z, the default shapes) a quarter to all of the simulated sites below ended at another maximum. `fit_problem` therefore starts every parameter that `init_params` leaves open, and that is neither frozen nor a tie's target, from `estimate_start` (`src/start.jl`). It skips the estimate when all the parameters it gives are set, so a fully specified fit (the benchmarks, the moved start of `test/fit.jl`) costs what it did.
+
+**Choices.** Measured first in scratch tests with LocMoFitPy (2026-11-11 and 12), then here:
+
+- The localizations within twice the median distance from their median: that drops most of the background.
+- Each weighted by the inverse of its summed precision variance: the precisions are heavy-tailed (dim events), and the weights halved the median axis error of a ring's or a cap's start (7.9° to 3.5°).
+- One part: the axis is the covariance's eigenvector with the smallest eigenvalue. Two parts: the eigenvalues are nearly equal (two rings with d ≈ √2 r), so a search scores 100 directions over the hemisphere, then the best one and 64 within 25° of it.
+- The ring's score includes the spread of the heights along the axis. Without it, 22 of the 100 coaxial double rings started near the axis perpendicular to theirs and stayed there; with it, none.
+- A ring and a cap are told apart by the spread of their distances from the axis relative to the median. The search score cannot do it, since a cap's parabola fits a ring's group as well: assigned by the score, 13 of the 100 coaxial cap + ring sites started with the parts swapped.
+- A cap's size is the weighted mean of |x − apex|² − Σ s², over 2. Unweighted, a few dim localizations made it negative on 5 of the cap + ring sites, so s started at the floor of 1 nm, and those fits missed.
+- Not adopted: picking one of several starts by the loss at the start (it picked the wrong one on 7 to 26 of 100 sites), and keeping the best of several fits, which costs 3 to 4 fits per site. It was needed only while the ring's score lacked the heights' spread, and could return as an option.
+- 2D: only the position. A 2D ring started untilted stays untilted: its projection is the same tilted either way, so the start is a stationary point of the loss in the tilt (as before, with the defaults).
+
+**Measured** with `benchmarks/start/` (`generate.jl`, then `fit.jl`; `estimate_2026-11-13.txt`) on DynMoSim sites with LocMoFit.jl's benchmark acquisition (shot-noise precisions, 15% background in a 300 nm cube, `fov_volume` = 300³ nm³), every site with its own true parameters:
+
+- 200 rings: r 30–80 nm, 100 signal localizations.
+- 100 caps: s 30–60 nm, κ′ 0.1–0.9, 250 signal localizations.
+- 100 double rings: equal radii of 35–65 nm, 35–65 nm apart, 160 signal localizations.
+- 100 caps above a ring: r 35–65 nm, s 20–35 nm, κ′ 0.3–0.8, the cap's rim 20–50 nm above the ring, 300 signal localizations.
+
+The axis was tilted up to 60° (rings, double rings) or 45° (caps, cap + ring), and the center was up to 30 nm off laterally and 60 nm axially. A fit missed when its loss ended more than 0.01 per localization above that of the fit started at the truth. "Defaults" is the start before this change. Times are the totals of the fits on one thread, after compilation; the estimate's cost is per site.
+
+| | Missed, estimated start | Missed, defaults | Estimate's axis off (median) | Estimate | Fits, estimated start | Fits, defaults |
+| --- | --- | --- | --- | --- | --- | --- |
+| Ring | 0 | 25 | 3.5° | 0.04 ms | 0.6 s | 1.1 s |
+| SphericalCap | 0 | 24 | 3.6° | 0.15 ms | 11.1 s | 20.0 s |
+| DoubleRing, coaxial (`x2, y2, vx2, vy2` frozen) | 0 | 58 | 3.3° | 1.0 ms | 1.1 s | 1.8 s |
+| DoubleRing, all free | 0 | 70 | 3.3° | 1.0 ms | 1.5 s | 2.0 s |
+| SpCapRing, coaxial | 0 | 93 | 6.0° | 2.2 ms | 7.6 s | 38.7 s |
+| SpCapRing, all free | 3 | 98 | 6.0° | 2.2 ms | 8.9 s | 40.6 s |
+
+The estimated axis was never more than 45° off. The 3 fits that missed from the estimated start had the second component free, and the same starts did not miss with it held coaxial; their cap's curvature started low (κ′ about 0.1 against 0.5–0.7), since the noise in ρ² flattens the parabola fitted to it.

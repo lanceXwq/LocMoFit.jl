@@ -15,6 +15,7 @@ include("transformations.jl")
 include("spcap.jl")
 include("ring.jl")
 include("composite.jl")
+include("start.jl")
 include("loss.jl")
 include("rules.jl")
 
@@ -27,7 +28,7 @@ const BFGS_BACKTRACKING = BFGS(; linesearch=Optim.LineSearches.BackTracking())
     fit_problem(model, locs, loc_precisions; init_params, freeze, tie, spacing, point_params, dtype, background,
                 fov_volume, signal_prior) -> (p, u₀)
 
-Everything a fit needs: `p` for [`loss`](@ref) and the free parameters `u₀` to start from. The keywords are those of [`run_locmofit`](@ref).
+Everything a fit needs: `p` for [`loss`](@ref) and the free parameters `u₀` to start from, with what `init_params` leaves open estimated from the localizations ([`estimate_start`](@ref)). The keywords are those of [`run_locmofit`](@ref).
 """
 function fit_problem(
     model::Model,
@@ -52,32 +53,46 @@ function fit_problem(
     # the starting axes, as theta, phi (thetak, phik for component k), center the orientation charts; they are not parameters
     axes = orientation_names(model)
     axis_names = Tuple(Iterators.flatten(axes))
-    frozen_axes = Tuple(k for k in freeze_names(freeze) if k in axis_names)
+    frozen = freeze_names(freeze)
+    frozen_axes = Tuple(k for k in frozen if k in axis_names)
     isempty(frozen_axes) || throw(
         ArgumentError(
             "theta and phi only set the starting axis, $frozen_axes; to keep the " *
             "orientation, freeze its chart coordinates (vx, vy, or vxk, vyk for component k)",
         ),
     )
+    # what init_params leaves open, frozen and tied parameters excepted, starts from the data (derivations/derivation.qmd), along the starting axis of component 1 if it is given or its orientation frozen
+    θa, ϕa = axes[1]
+    given_axis =
+        haskey(init_params, θa) ||
+        haskey(init_params, ϕa) ||
+        any(k -> k in frozen, chart_names(model))
+    axis =
+        given_axis ? axis_vector(get(init_params, θa, 0), get(init_params, ϕa, 0)) : nothing
+    targets = map(first, tie_pairs(tie))
+    isopen(k) = !haskey(init_params, k) && !(k in frozen) && !(k in targets)
+    estimate = if any(isopen, start_names(model, size(locs, 1)))
+        estimate_start(model, locs, loc_precisions, axis)
+    else
+        NamedTuple()
+    end
+    open = Tuple(k for k in keys(estimate) if isopen(k))
+    init = merge(NamedTuple{open}(estimate), init_params)
     starts = map(
-        n -> (
-            convert(dtype, get(init_params, n[1], 0)),
-            convert(dtype, get(init_params, n[2], 0)),
-        ),
-        axes,
+        n -> (convert(dtype, get(init, n[1], 0)), convert(dtype, get(init, n[2], 0))), axes
     )
 
     θ₀ = default_parameters(model, dtype)
     background && (θ₀ = merge(θ₀, (logit_prob=convert(dtype, log(9)),)))   # signal fraction 0.9
-    θ₀ = apply_init(θ₀, Base.structdiff(init_params, NamedTuple{axis_names}))
-    pmap = ParameterMap(θ₀, freeze_names(freeze), tie_pairs(tie))
+    θ₀ = apply_init(θ₀, Base.structdiff(init, NamedTuple{axis_names}))
+    pmap = ParameterMap(θ₀, frozen, tie_pairs(tie))
     θ₀ = full_parameters(free_parameters(θ₀, pmap), pmap)      # with the ties applied
     # the values the points are generated from: point_params in place of the starting values, with the ties applied
     θpoints = if isempty(point_params)
         θ₀
     else
         θp = apply_init(θ₀, point_params)
-        mp = ParameterMap(θp, freeze_names(freeze), tie_pairs(tie))
+        mp = ParameterMap(θp, frozen, tie_pairs(tie))
         full_parameters(free_parameters(θp, mp), mp)
     end
     unit = unit_model(model, θpoints, starts; spacing)
@@ -111,6 +126,9 @@ orientation_names(::SimpleModel) = ((:theta, :phi),)
 function orientation_names(c::Composite)
     return ntuple(k -> (Symbol(:theta, k), Symbol(:phi, k)), ncomponents(c))
 end
+# the chart coordinates of component 1's axis
+chart_names(::SimpleModel) = (:vx, :vy)
+chart_names(::Composite) = (:vx1, :vy1)
 
 """
     unit_model(model, θ, starts; spacing)
@@ -197,7 +215,7 @@ end
 Fit `model` to one site's localizations by maximizing the posterior of derivations/derivation.qmd: a mixture of the structure and a uniform background, with a Beta prior on the signal fraction, by BFGS with a backtracking line search (gradients by Enzyme). `model` is a [`Model`](@ref), such as `Ring()` or `Composite(Ring(), SphericalCap())`, or the name of a function in LocMoFit that returns one, such as `"Ring"` or `"DoubleRing"`. A fit runs on one thread. Fitting many sites in threads (`Threads.@threads`) is much faster, but has rarely crashed Julia with memory corruption, for reasons not yet known; separate processes are safe.
 
 - `locs`, `loc_precisions`: `D×N` positions and per-axis precisions (standard deviations), in nm, with `D ∈ {2, 3}`. A 2D fit uses the first two coordinates of the model.
-- `init_params`: starting values that replace the defaults (`default_parameters`, plus `logit_prob` with a background); unknown names are ignored with a warning. The starting axis is given as `theta`, `phi` (polar angle and azimuth; `thetak`, `phik` for component k, in component 1's frame for k > 1, default 0): the orientation is fitted as the coordinates `vx`, `vy` of a tangent chart centered on it, which start at 0.
+- `init_params`: starting values; unknown names are ignored with a warning. A parameter not given starts from a value estimated from the localizations ([`estimate_start`](@ref); derivations/derivation.qmd, Starting values from the data), unless it is frozen or tied: then, and wherever nothing is estimated, it starts from its default (`default_parameters`, plus `logit_prob` with a background). The estimate covers a `Ring`, a `SphericalCap` and a composite of two of them sharing an axis (such as `DoubleRing` and `SpCapRing`): in 3D the position, the axis and the shape, and for a composite the second component's distance along the axis (`z2`) and the shares (`omega2`); in 2D only the position. The blur and the signal fraction start from their defaults. The starting axis is given as `theta`, `phi` (polar angle and azimuth; `thetak`, `phik` for component k, in component 1's frame for k > 1, default 0): the orientation is fitted as the coordinates `vx`, `vy` of a tangent chart centered on it, which start at 0. A starting axis given for component 1, or its orientation frozen, is used instead of the estimated one, and the shape is estimated along it.
 - `freeze`: names of the parameters kept at their starting values (for the orientation, `vx` and `vy`).
 - `tie`: pairs `target => source`, such as `:r2 => :r1`: the target takes the source's value throughout.
 - `max_iter`: the most iterations the optimizer takes.

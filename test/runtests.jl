@@ -16,7 +16,7 @@ using LocMoFit:
     exp_nonpositive,
     chart_rotation,
     rotmat
-using LinearAlgebra: norm, dot, cross
+using LinearAlgebra: norm, dot, cross, normalize
 using Statistics: mean
 using Test
 
@@ -590,6 +590,105 @@ end
         spacing=3.0,
     )
     @test npoints(pd) == (ceil(Int, 2π * 40 / 3), ceil(Int, 2π * 40 / 3)) && ud.r1 == 70
+end
+
+@testset "starting values from the data" begin
+    # derivations/derivation.qmd, Starting values from the data: noise-free points with isotropic precisions, so that the expected values follow from the geometry
+    estimate_start = LocMoFit.estimate_start
+    n, c = direction(0.4, 1.1), [3.0, -2.0, 5.0]
+    R = rotation(0.4, 1.1)                          # turns z to n
+    angle_of(e, k="") = direction(e[Symbol(:theta, k)], e[Symbol(:phi, k)])
+
+    # a ring: its center is the mean, its axis the eigenvector with the smallest eigenvalue, its radius every point's distance from the axis
+    ring = R * (40 .* LocMoFit.unit_ring(Float64, 120)) .+ c
+    e = estimate_start(Ring(), ring, fill(2.0, size(ring)), nothing)
+    @test [e.x, e.y, e.z] ≈ c && e.r ≈ 40 && angle_of(e) ≈ n
+
+    # a cap, each point with its mirror image through the axis: the axis is exact and the apex lies on it; flat, the apex is the center and s² is the true s² less half the summed precision variance (here 3·1²), since the mean squared distance from the apex is 2s²
+    U = LocMoFit.unit_cap(Float64, 400)
+    U = hcat(U, [-U[1:2, :]; U[3:3, :]])
+    for eta in (0.0, 0.5)
+        cap = R * LocMoFit.local_points(SphericalCap(), U, (s=30.0, eta=eta)) .+ c
+        e = estimate_start(SphericalCap(), cap, fill(1.0, size(cap)), nothing)
+        @test angle_of(e) ≈ n                       # κ′ ≥ 0, as the true cap's
+        @test norm(cross([e.x, e.y, e.z] - c, n)) < 1e-9
+        eta == 0 &&
+            @test [e.x, e.y, e.z] ≈ c && e.s ≈ sqrt(30^2 - 3 / 2) && abs(e.eta) < 1e-9
+    end
+
+    # the two scores against loops over the derivation's formulas, on scattered localizations
+    locs = [
+        10 * pseudo(d, i) + (d == 3 ? 30 * sign(pseudo(9, i)) : 0) for d in 1:3, i in 1:40
+    ]
+    precs = [2 + abs(pseudo(d + 20, i)) for d in 1:3, i in 1:40]
+    f = LocMoFit.site_frame(locs, precs)
+    s = LocMoFit.AxisScores(f)
+    m = normalize([0.2, -0.1, 1.0])
+    LocMoFit.score!(s, (Ring(), Ring()), m)
+    G = s.order[1:(s.nlow)]
+    w = [dot(f.rel[:, i], m) for i in G]
+    ρ = [sqrt(norm(f.rel[:, i])^2 - dot(f.rel[:, i], m)^2) for i in G]
+    along = [sum(f.var[:, i] .* m .^ 2) for i in G]
+    across = [(sum(f.var[:, i]) - a) / 2 for (i, a) in zip(G, along)]
+    cw = f.c[G]
+    mean_w(x) = sum(cw .* x) / sum(cw)
+    @test LocMoFit.part_score(Ring(), s, G) ≈
+        sum(cw .* ((ρ .- mean_w(ρ)) .^ 2 .+ (w .- mean_w(w)) .^ 2 .- across .- along))
+    A = sqrt.(cw) .* [ones(length(G)) ρ .^ 2]
+    ab = A \ (sqrt.(cw) .* w)
+    @test LocMoFit.part_score(SphericalCap(), s, G) ≈
+        sum(cw .* ((w .- ab[1] .- ab[2] .* ρ .^ 2) .^ 2 .- along))
+
+    # two coaxial rings far apart compared with their radius (r = 35, d = 65 nm), along one of the coarse candidate axes: there both groups are circles around it, so its score is the lowest and the search returns it exactly, and each ring's start is exact
+    a = LocMoFit.hemisphere(LocMoFit.START_COARSE)[:, 30]
+    Ra = minrot(a)
+    unit = 35 .* LocMoFit.unit_ring(Float64, 60)
+    two = hcat(Ra * unit .+ (c - 32.5a), Ra * unit .+ (c + 32.5a))
+    e = estimate_start(DoubleRing(), two, fill(2.0, size(two)), nothing)
+    @test angle_of(e, 1) ≈ a
+    @test [e.x1, e.y1, e.z1] ≈ c - 32.5a && e.r1 ≈ 35 && e.r2 ≈ 35
+    @test e.z2 ≈ 65 && abs(e.omega2) < 1e-12
+
+    # fit_problem: given values are kept, frozen ones not given keep their defaults, a tie's target follows its source, and the rest is estimated
+    p, u = fit_problem(
+        DoubleRing(),
+        two,
+        fill(2.0, size(two));
+        init_params=(r1=50.0,),
+        freeze=(:z1,),
+        tie=(:r2 => :r1,),
+    )
+    θ = full_parameters(u, p.parameter_map)
+    @test θ.r1 == 50 && θ.r2 == 50 && θ.z1 == 0
+    @test [θ.x1, θ.y1] ≈ (c - 32.5a)[1:2] && θ.z2 ≈ 65
+    @test p.unit_model[1].chart[:, 3] ≈ a
+    # a starting axis given is used
+    p, _ = fit_problem(DoubleRing(), two, fill(2.0, size(two)); init_params=(theta1=0.0,))
+    @test p.unit_model[1].chart[:, 3] ≈ [0, 0, 1]
+    # in 2D only the position is estimated
+    p, u = fit_problem(Ring(), ring[1:2, :], fill(2.0, 2, size(ring, 2)))
+    θ = full_parameters(u, p.parameter_map)
+    @test [θ.x, θ.y] ≈ c[1:2] &&
+        θ.z == 0 &&
+        θ.r == 50 &&
+        p.unit_model.chart[:, 3] ≈ [0, 0, 1]
+    # start_names lists what estimate_start gives, so that fit_problem can skip it when all of them are given
+    for m in (
+            Ring(),
+            SphericalCap(),
+            DoubleRing(),
+            SpCapRing(),
+            Composite(SphericalCap(), Ring()),
+        ),
+        D in (3, 2)
+
+        @test keys(estimate_start(m, locs[1:D, :], precs[1:D, :], nothing)) ==
+            LocMoFit.start_names(m, D)
+    end
+    # a model without an estimate starts from its defaults
+    p, u = fit_problem(Composite(Ring(), Ring(), Ring()), two, fill(2.0, size(two)))
+    @test full_parameters(u, p.parameter_map) ==
+        merge(default_parameters(p.model, Float64), (logit_prob=log(9),))
 end
 
 include("fit.jl")

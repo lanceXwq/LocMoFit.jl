@@ -1,0 +1,7 @@
+# julia --project=. benchmarks/start/fit.jl (all sites, one thread), 2026-11-13, on the data of benchmarks/start/generate.jl
+Ring                                         200 sites: missed   0 from the estimate,  25 from the defaults; estimate's axis off median  3.5 deg, > 45 deg on  0; estimate  0.04 ms per site; fits   0.6 s (estimate) vs   1.1 s (defaults)
+SphericalCap                                 100 sites: missed   0 from the estimate,  24 from the defaults; estimate's axis off median  3.6 deg, > 45 deg on  0; estimate  0.15 ms per site; fits  11.1 s (estimate) vs  20.0 s (defaults)
+DoubleRing, coaxial (x2, y2, vx2, vy2 frozen) 100 sites: missed   0 from the estimate,  58 from the defaults; estimate's axis off median  3.3 deg, > 45 deg on  0; estimate  1.02 ms per site; fits   1.1 s (estimate) vs   1.8 s (defaults)
+DoubleRing, all free                         100 sites: missed   0 from the estimate,  70 from the defaults; estimate's axis off median  3.3 deg, > 45 deg on  0; estimate  1.02 ms per site; fits   1.5 s (estimate) vs   2.0 s (defaults)
+SpCapRing, coaxial (x2, y2, vx2, vy2 frozen) 100 sites: missed   0 from the estimate,  93 from the defaults; estimate's axis off median  6.0 deg, > 45 deg on  0; estimate  2.16 ms per site; fits   7.6 s (estimate) vs  38.7 s (defaults)
+SpCapRing, all free                          100 sites: missed   3 from the estimate,  98 from the defaults; estimate's axis off median  6.0 deg, > 45 deg on  0; estimate  2.18 ms per site; fits   8.9 s (estimate) vs  40.6 s (defaults)
