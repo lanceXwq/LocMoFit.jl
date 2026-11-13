@@ -679,16 +679,21 @@ end
             DoubleRing(),
             SpCapRing(),
             Composite(SphericalCap(), Ring()),
+            Composite(Ring(), Ring(), Ring()),
         ),
         D in (3, 2)
 
         @test keys(estimate_start(m, locs[1:D, :], precs[1:D, :], nothing)) ==
             LocMoFit.start_names(m, D)
     end
-    # a model without an estimate starts from its defaults
+    # a model without an estimate of its shape starts from its defaults, but with component 1 at the localizations' weighted center: here c, about which the two rings are symmetric
     p, u = fit_problem(Composite(Ring(), Ring(), Ring()), two, fill(2.0, size(two)))
-    @test full_parameters(u, p.parameter_map) ==
-        merge(default_parameters(p.model, Float64), (logit_prob=log(9),))
+    θ = full_parameters(u, p.parameter_map)
+    @test [θ.x1, θ.y1, θ.z1] ≈ c
+    @test Base.structdiff(θ, NamedTuple{(:x1, :y1, :z1)}) == Base.structdiff(
+        merge(default_parameters(p.model, Float64), (logit_prob=log(9),)),
+        NamedTuple{(:x1, :y1, :z1)},
+    )
 end
 
 include("fit.jl")

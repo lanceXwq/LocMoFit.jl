@@ -8,9 +8,20 @@ const START_MAX_KAPPA = 0.95        # |κ′| of a starting cap, which keeps η 
 """
     estimate_start(model, locs, loc_precisions, axis) -> NamedTuple
 
-Starting values for `model` estimated from one site's localizations (`D×N` positions and precisions, nm), as `init_params` takes them: in 3D the position, the starting axis (`theta`, `phi`) and the shape of a `Ring` or a `SphericalCap`, and for a composite of two of them sharing an axis also the second component's shape and distance along the axis (`z2`) and the shares (`omega2`); in 2D only the position. `axis`, a unit vector or `nothing`, is a starting axis given by the user, along which the rest is estimated; with `nothing` the axis is estimated too. Other models get an empty `NamedTuple`, so they start from their defaults. Values that come out undefined (too few localizations) are left out.
+Starting values for `model` estimated from one site's localizations (`D×N` positions and precisions, nm), as `init_params` takes them: in 3D the position, the starting axis (`theta`, `phi`) and the shape of a `Ring` or a `SphericalCap`, and for a composite of two of them sharing an axis also the second component's shape and distance along the axis (`z2`) and the shares (`omega2`); in 2D only the position. `axis`, a unit vector or `nothing`, is a starting axis given by the user, along which the rest is estimated; with `nothing` the axis is estimated too. Any other model gets only the position of its component 1, at the weighted center of the localizations, so that its fit starts at the site rather than at the origin; the rest starts from its defaults. Values that come out undefined (too few localizations) are left out.
 """
-estimate_start(::Model, locs, loc_precisions, axis) = NamedTuple()
+function estimate_start(m::Model, locs, loc_precisions, axis)
+    return position_start(m, locs, loc_precisions)
+end
+
+# the position of component 1 at the weighted center of the localizations
+function position_start(m::Model, locs, loc_precisions)
+    f = site_frame(locs, loc_precisions)
+    f === nothing && return NamedTuple()
+    return finite_values(NamedTuple{position_names(m, size(locs, 1))}(Tuple(f.center)))
+end
+position_names(::SimpleModel, D) = D == 2 ? (:x, :y) : (:x, :y, :z)
+position_names(::Composite, D) = D == 2 ? (:x1, :y1) : (:x1, :y1, :z1)
 
 function estimate_start(m::Union{Ring,SphericalCap}, locs, loc_precisions, axis)
     f = site_frame(locs, loc_precisions)
@@ -24,7 +35,8 @@ function estimate_start(
     c::Composite{<:Tuple{SimpleModel,SimpleModel}}, locs, loc_precisions, axis
 )
     parts = c.components
-    all(p -> p isa Union{Ring,SphericalCap}, parts) || return NamedTuple()
+    all(p -> p isa Union{Ring,SphericalCap}, parts) ||
+        return position_start(c, locs, loc_precisions)
     f = site_frame(locs, loc_precisions)
     f === nothing && return NamedTuple()
     size(locs, 1) == 2 && return finite_values((x1=f.center[1], y1=f.center[2]))
@@ -62,13 +74,13 @@ function estimate_start(
 end
 
 # the names estimate_start gives a model in D dimensions, so that fit_problem can skip it when they are all given
-start_names(::Model, D) = ()
+start_names(m::Model, D) = position_names(m, D)
 function start_names(m::Union{Ring,SphericalCap}, D)
     D == 2 && return (:x, :y)
     return (:x, :y, :z, keys(shape_parameters(m, Float64))..., :theta, :phi)
 end
 function start_names(c::Composite{<:Tuple{SimpleModel,SimpleModel}}, D)
-    all(p -> p isa Union{Ring,SphericalCap}, c.components) || return ()
+    all(p -> p isa Union{Ring,SphericalCap}, c.components) || return position_names(c, D)
     D == 2 && return (:x1, :y1)
     s1, s2 = (keys(suffixed(shape_parameters(c.components[k], Float64), k)) for k in 1:2)
     return (:x1, :y1, :z1, :theta1, :phi1, s1..., :z2, s2..., :omega2)
