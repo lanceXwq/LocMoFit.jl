@@ -53,7 +53,18 @@ In Float32 (the default `dtype` until 2026-10-29, now an option), BFGS can stop 
 
 **Accepted (2026-10-29, the owner's decision).** Float64 is the default and does not stop early. A Float32 fit is faster (a cap 1.6×) and can stop with the loss up to about 10⁻⁴ per localization above the optimum and the parameters off by up to about 0.5–0.9 (nm or the cap's units) on the tutorial sites, far inside their statistical error but not zero; use Float64 where that matters.
 
-**Possible remedies (not done).** (1) Finish a Float32 fit with a few Float64 iterations from where it stopped: exact, and it keeps most of the speed, since the Float64 part starts near the optimum. (2) Subtract each localization's log density at the start from the loss, so that the loss is near 0 and its changes keep more digits: in LocMoFitPy, on 10 starts nudged around each tutorial site, it cut the early stops of the ring, the cap and the cap with ring from 0, 6 and 9 to 0, 1 and 3 out of 10, so it helps but does not end them. Either would be mirrored in LocMoFitPy.
+**Far from the origin it is worse (measured 2026-11-13).** SMLM coordinates are absolute, up to about 100–200 µm on a large camera, and in Float32 a coordinate at 100 µm is resolved only to 0.0078 nm (at 100 nm, to 8·10⁻⁶ nm). The accuracy benchmark's sites (20 per model, background, moved start) were fitted with x and y moved by 25 and 100 µm and compared with the Float64 fit at the original position (scratch scripts; the same in LocMoFitPy, its `NOTES.md`). Each cell: the largest change of the position and of the axis over the sites, in units of the statistical error (the RMS error of the Float64 fits against the truth), and the median loss above the Float64 optimum, per localization:
+
+| | Float32 at the origin | at 25 µm | at 100 µm |
+| --- | --- | --- | --- |
+| Ring | 0.08, 0.02; 3·10⁻⁶ | 0.04, 0.02; 4·10⁻⁷ | 0.14, 0.04; 8·10⁻⁶ |
+| SphericalCap | 0.92, 0.86; 3·10⁻⁵ | 0.45, 0.43; 6·10⁻⁵ | 2.8, 2.7; 1.2·10⁻² |
+| DoubleRing | 0.17, 0.18; 8·10⁻⁵ | 0.69, 0.59; 1·10⁻⁴ | 0.34, 0.70; 1·10⁻⁴ |
+| SpCapRing | 0.60, 1.3; 1.4·10⁻³ | 0.48, 1.2; 8·10⁻⁴ | 0.60, 1.2; 1.5·10⁻³ |
+
+Float64 fits moved by 100 µm changed by at most 6·10⁻⁷ nm. At 100 µm every Float32 cap fit stopped on an unchanged loss (14 of the 20 after a last iteration that moved no parameter at all), after a median of 30 iterations (44 at the origin), up to 13.6 nm and 6.9° from the optimum, and every one reported `Success`. The model points are placed at the absolute coordinates, so a parameter change that moves them by less than about 0.004 nm is rounded away, and the loss changes only in steps on that scale; once the line search's steps are that small, the loss stops changing and Optim.jl stops. Most likely the cap is hit hardest because it approaches its optimum slowly, in small steps along which its apex, size and curvature trade off, so it reaches that scale far from the optimum. The other models stay within their statistical error at every offset.
+
+**Possible remedies (not done).** (1) Finish a Float32 fit with a few Float64 iterations from where it stopped: exact, and it keeps most of the speed, since the Float64 part starts near the optimum. (2) Subtract each localization's log density at the start from the loss, so that the loss is near 0 and its changes keep more digits: in LocMoFitPy, on 10 starts nudged around each tutorial site, it cut the early stops of the ring, the cap and the cap with ring from 0, 6 and 9 to 0, 1 and 3 out of 10, so it helps but does not end them. (3) Subtract the site's position from the localizations before the fit and add it back to the fitted positions, as SMAP's LocMoFit does (which also computes in double precision): it would remove the loss of accuracy far from the origin, though not the early stops at the origin. Any of them would be mirrored in LocMoFitPy.
 
 ## The signal prior (2026-10-28)
 
