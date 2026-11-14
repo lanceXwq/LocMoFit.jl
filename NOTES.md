@@ -70,6 +70,27 @@ Float64 fits moved by 100 µm changed by at most 6·10⁻⁷ nm. At 100 µm ever
 
 The Beta prior on the signal fraction π keeps its mode at 0.8 (the owner's choice) but became flatter: Beta(5, 2), worth 5 localizations, instead of DynMoFit's Beta(197, 50), worth 245. On the benchmark's sites with 15% background, Beta(197, 50) pulled π by −0.025 to −0.033 (z down to −13); Beta(41, 11) by about −0.01 to −0.016; Beta(17, 5) by −0.004 to −0.009; Beta(5, 2) by at most 0.004, within its scatter of about 0.013. The geometry was the same under every prior. On data without background the fitted π went from 0.85–0.90 to 0.985–0.994 (truth 1). Beta(5, 2) still vanishes at π = 0 and 1, so π stays inside (0, 1) (`benchmarks/accuracy/prior_5_2_2026-10-28.txt`).
 
+## The share prior (2026-11-14)
+
+**Why.** On real data a composite lost a component. On the owner's first real dataset (20 late endocytic sites of yeast, 2D, side view; fitted in a scratch study with LocMoFitPy as a coaxial SpCapRing, the axis in the image plane and the cap held as a half-sphere of 40 nm), the cap's share fell to 0 on 10 of the 20 sites: started below its cluster of localizations, the cap first lost its share (on one site from 0.5 to 0.001 within 20 iterations), after which the loss no longer depended on where the cap was (flat to 1e-5 per localization over 200 nm of z2), and the fit ended with the cap wherever its start had put it. With the cap held at each z2 and the rest refitted from a share of 1/2, that site had a fit 0.36 per localization (42 in log posterior) better. `derivations/derivation.qmd`, A prior on the shares, gives the mechanism and the prior.
+
+**Measured** in the same scratch study, with the prior patched into LocMoFitPy's loss for the run. Each site's fits were scored with the loss without the share prior against the best fit found for it (the lowest of all variants and of a profile over z2 with the share restarted at 1/2); "at the best" is within 0.01 per localization. Scored with each prior's own loss instead, the counts were the same.
+
+| | Components switched off (share < 0.05) | Sites at the best | Shares moved, against free shares where those kept both components |
+| --- | --- | --- | --- |
+| Free shares | 10 | 9 | — |
+| Dirichlet(2) | 1 | 17 | 0.002 |
+| Dirichlet(5) | 0 | 18 | 0.007 |
+| Dirichlet(10) | 0 | 17 | 0.013 |
+| Shares frozen equal (as the original LocMoFit held its weights) | 0 | 9 | 0.073 |
+| Free shares, z2 started at the lower cluster | 1 | 18 | 0.000 |
+
+A start near the cap's localizations worked as well as the prior there, but that start depended on the dataset's frame; the prior applies to every composite. The two sites that miss the best with Dirichlet(5) differ in the ring and the background, not the cap: a long ring that calls nearly everything signal, or a shorter one that calls the band's end background. Localizations of a nearby site may explain that (the owner), so they are not counted as failures of the fit.
+
+**Choice.** Dirichlet(5) by default (`share_prior = 5`, the owner's decision, 2026-11-14), passed as `nothing` for none. Values below 1 are refused, since the prior then grows without bound as a share goes to 0.
+
+**Measured on the accuracy benchmark** (`benchmarks/accuracy/share_prior_2026-11-14.txt`, against the same run with `share_prior = nothing`): the geometry did not change (every error within a few percent of its scatter), the simple models were identical, and the double ring's share (true 1/2) kept its bias. The ring's share of the cap with a ring (true 0.3) moved by +0.0064 to +0.0075 (z 2.4–2.7, against a scatter of 0.012 over the sites). For fixed responsibilities, `derivations/derivation.qmd` (@eq-share-map) predicts +0.0052 to +0.0054 for these sites' 265 to 361 signal localizations; the rest comes from the responsibilities, which move with the shares. `test/fit.jl` takes the composites' tolerances from this run and allows that share its bias.
+
 ## Starting values from the data (2026-11-12)
 
 **Why.** BFGS climbs to the maximum whose basin holds the start, and the posterior has others: for two rings, one at the axis perpendicular to theirs (`derivations/derivation.qmd`, Starting values from the data). From the fixed defaults (the center at the origin, the axis along z, the default shapes) a quarter to all of the simulated sites below ended at another maximum. `fit_problem` therefore starts every parameter that `init_params` leaves open, and that is neither frozen nor a tie's target, from `estimate_start` (`src/start.jl`). It skips the estimate when all the parameters it gives are set, so a fully specified fit (the benchmarks, the moved start of `test/fit.jl`) costs what it did.

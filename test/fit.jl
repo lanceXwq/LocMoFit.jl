@@ -1,4 +1,4 @@
-# Fits of the tutorial data (examples/data: one simulated site per model, 15% background, a 300 nm field of view), from the benchmark's moved start: positions +5 nm, sizes ×1.15 (a cap's κ′ ×0.85), starting axes moved by 0.15 rad in θ and ϕ, blur 2 nm, the default signal fraction and shares. Every error must stay within 4× the scatter of one fit, measured over the 20 sites of the accuracy benchmark in the same setting (benchmarks/accuracy/prior_5_2_2026-10-28.txt, background, moved start, Float64); an axis's error within its mean plus 4× its scatter. Under the default prior Beta(5, 2) the signal fraction showed no bias there, so it gets 4× its scatter too.
+# Fits of the tutorial data (examples/data: one simulated site per model, 15% background, a 300 nm field of view), from the benchmark's moved start: positions +5 nm, sizes ×1.15 (a cap's κ′ ×0.85), starting axes moved by 0.15 rad in θ and ϕ, blur 2 nm, the default signal fraction and shares. Every error must stay within 4× the scatter of one fit, measured over the 20 sites of the accuracy benchmark in the same setting (benchmarks/accuracy/share_prior_2026-11-14.txt, background, moved start, Float64; the simple models' values are those of prior_5_2_2026-10-28.txt, which the share prior does not change); an axis's error within its mean plus 4× its scatter. Under the default prior Beta(5, 2) the signal fraction showed no bias there, so it gets 4× its scatter too. The default share prior moves the ring's share of the cap with a ring by +0.0075 there (from 0.3 toward 1/2, derivations/derivation.qmd, @eq-share-map), so that share must stay within 4× its scatter of that bias.
 
 include(joinpath(@__DIR__, "tutorial.jl"))
 
@@ -40,13 +40,13 @@ end
     )
     c, t = r.components, true_components("DoubleRing", truth, locs, precs)
     @test string(r.result.retcode) == "Success"
-    @test all(abs.(c[1].position - t[1].position) .< 4 .* [0.9911, 1.062, 2.571])
-    @test all(abs.(c[2].position - t[2].position) .< 4 .* [1.223, 1.388, 2.484])
-    @test abs(c[1].r - t[1].r) < 4 * 1.001 && abs(c[2].r - t[2].r) < 4 * 0.6971
-    @test axis_deg(c[1].axis, t[1].axis) < 3.841 + 4 * 2.594
-    @test axis_deg(c[2].axis, t[2].axis) < 4.687 + 4 * 2.661
-    @test abs(r.signal_fraction - mean(signal)) < 4 * 0.01165
-    @test abs(r.weights[1] - mean(component[signal] .== 1)) < 4 * 0.03392
+    @test all(abs.(c[1].position - t[1].position) .< 4 .* [0.9888, 1.065, 2.576])
+    @test all(abs.(c[2].position - t[2].position) .< 4 .* [1.221, 1.387, 2.473])
+    @test abs(c[1].r - t[1].r) < 4 * 1.002 && abs(c[2].r - t[2].r) < 4 * 0.6958
+    @test axis_deg(c[1].axis, t[1].axis) < 3.837 + 4 * 2.595
+    @test axis_deg(c[2].axis, t[2].axis) < 4.687 + 4 * 2.659
+    @test abs(r.signal_fraction - mean(signal)) < 4 * 0.01164
+    @test abs(r.weights[1] - mean(component[signal] .== 1)) < 4 * 0.03137
 end
 
 @testset "fit of the spherical cap" begin
@@ -69,15 +69,15 @@ end
     c, t = r.components, true_components("SpCapRing", truth, locs, precs)
     center(k) = k.position - k.radius * k.axis                           # the cap's sphere's center
     @test string(r.result.retcode) == "Success"
-    @test all(abs.(c[1].position - t[1].position) .< 4 .* [1.279, 1.513, 2.281])
-    @test abs(c[1].r - t[1].r) < 4 * 0.8047
-    @test axis_deg(c[1].axis, t[1].axis) < 3.621 + 4 * 1.726
-    @test all(abs.(center(c[2]) - center(t[2])) .< 4 .* [2.183, 2.418, 11.07])
-    @test abs(c[2].radius - t[2].radius) < 4 * 8.971 &&
-        abs(c[2].alpha - t[2].alpha) < 4 * 0.193
-    @test angle_deg(c[2].axis, t[2].axis) < 4.145 + 4 * 2.22
-    @test abs(r.signal_fraction - mean(signal)) < 4 * 0.01063
-    @test abs(r.weights[1] - mean(component[signal] .== 1)) < 4 * 0.01279
+    @test all(abs.(c[1].position - t[1].position) .< 4 .* [1.281, 1.515, 2.285])
+    @test abs(c[1].r - t[1].r) < 4 * 0.8052
+    @test axis_deg(c[1].axis, t[1].axis) < 3.624 + 4 * 1.735
+    @test all(abs.(center(c[2]) - center(t[2])) .< 4 .* [2.181, 2.418, 11.08])
+    @test abs(c[2].radius - t[2].radius) < 4 * 8.979 &&
+        abs(c[2].alpha - t[2].alpha) < 4 * 0.1926
+    @test angle_deg(c[2].axis, t[2].axis) < 4.134 + 4 * 2.216
+    @test abs(r.signal_fraction - mean(signal)) < 4 * 0.01061
+    @test abs(r.weights[1] - mean(component[signal] .== 1) - 0.0075) < 4 * 0.01225
 end
 
 @testset "fits from the estimated start" begin

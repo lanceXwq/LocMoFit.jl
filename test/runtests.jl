@@ -141,8 +141,10 @@ function problem(model, θ, starts, locs, precs; background=true, kwargs...)
     )
 end
 
-# The likelihood of derivations/derivation.qmd with plain loops: per localization, the mean of the Gaussian densities over each component's points (variances precision² + σ²), the components weighted by w, mixed with a uniform background of density 1/V at signal fraction f; minus the log posterior with the Beta(a, b) prior, per localization.
-function reference_loss(locs, precs, Ys, w, σ; f=nothing, V=1.0, prior=nothing)
+# The likelihood of derivations/derivation.qmd with plain loops: per localization, the mean of the Gaussian densities over each component's points (variances precision² + σ²), the components weighted by w, mixed with a uniform background of density 1/V at signal fraction f; minus the log posterior with the Beta(a, b) prior on f and the Dirichlet(α) prior on w, per localization.
+function reference_loss(
+    locs, precs, Ys, w, σ; f=nothing, V=1.0, prior=nothing, share_prior=nothing
+)
     D, N = size(locs)
     total = 0.0
     for n in 1:N
@@ -159,7 +161,8 @@ function reference_loss(locs, precs, Ys, w, σ; f=nothing, V=1.0, prior=nothing)
     else
         (prior[1] - 1) * log(f) + (prior[2] - 1) * log(1 - f)
     end
-    return -(total + logprior) / N
+    logshares = share_prior === nothing ? 0.0 : (share_prior - 1) * sum(log, w)
+    return -(total + logprior + logshares) / N
 end
 # each component's points (first D rows), and the components' shares, from the parameters
 parts(p, θ, D) = [model_points(p.model, p.unit_model, θ)[1:D, r] for r in p.ranges]
@@ -308,19 +311,59 @@ end
 
 @testset "loss against a reference" begin
     for (_, model, θ, starts) in CASES,
-        D in (3, 2), background in (true, false),
-        prior in ((197.0, 50.0), (3.0, 2.0), nothing)
+        D in (3, 2),
+        background in (true, false),
+        prior in ((197.0, 50.0), (3.0, 2.0), nothing),
+        α in (5.0, 2.5, nothing)
 
-        !background && prior !== (197.0, 50.0) && continue          # the prior only matters with a background
+        !background && prior !== (197.0, 50.0) && continue          # the signal prior only matters with a background
         locs, precs = test_data(model, θ, starts; D)
-        p, u = problem(model, θ, starts, locs, precs; background, signal_prior=prior)
+        p, u = problem(
+            model, θ, starts, locs, precs; background, signal_prior=prior, share_prior=α
+        )
         θp = full_parameters(u, p.parameter_map)
         @test penalty(model, θp) == 0
         f = background ? 1 / (1 + exp(-θp.logit_prob)) : nothing
         @test loss(u, p) ≈ reference_loss(
-            locs, precs, parts(p, θp, D), shares(model, θp), θp.sigma; f, V=FOV^D, prior
+            locs,
+            precs,
+            parts(p, θp, D),
+            shares(model, θp),
+            θp.sigma;
+            f,
+            V=FOV^D,
+            prior,
+            share_prior=α,
         ) rtol = 1e-10
     end
+end
+
+@testset "the share prior's optimum" begin
+    # two rings 2 µm apart along their axis, n₁ and n₂ localizations exactly on them, no background: every localization comes from its own ring (q = 0 or 1 in derivations/derivation.qmd, @eq-shares), so the share that maximizes the posterior is (n₂ + α - 1)/(n + 2(α - 1)) (@eq-share-map), and n₂/n without the prior
+    n1, n2, r = 30, 10, 50.0
+    ring(n, z) = reduce(
+        hcat,
+        [[r * cos(2π * (j - 0.5) / n), r * sin(2π * (j - 0.5) / n), z] for j in 1:n],
+    )
+    locs = hcat(ring(n1, 0.0), ring(n2, 2000.0))
+    precs = fill(5.0, size(locs))
+    θ = merge(default_parameters(DoubleRing(), Float64), (r1=r, r2=r, z2=2000.0, sigma=1.0))
+    fixed = Tuple(k for k in keys(θ) if k != :omega2)
+    for α in (5.0, 2.0, nothing)
+        fit = run_locmofit(
+            DoubleRing(),
+            locs,
+            precs;
+            init_params=θ,
+            freeze=fixed,
+            background=false,
+            share_prior=α,
+            tol=1e-10,
+        )
+        expected = α === nothing ? n2 / (n1 + n2) : (n2 + α - 1) / (n1 + n2 + 2(α - 1))
+        @test fit.weights[2] ≈ expected rtol = 1e-6
+    end
+    @test_throws ArgumentError fit_problem(Ring(), locs, precs; share_prior=0.5)
 end
 
 @testset "changing the length unit" begin

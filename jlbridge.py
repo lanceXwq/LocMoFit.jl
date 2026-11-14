@@ -40,6 +40,7 @@ def run_locmofit(
     background: bool = True,
     fov_volume: float | None = None,
     signal_prior: tuple[float, float] | None = (5, 2),
+    share_prior: float | None = 5.0,
     history: bool = False,
 ) -> dict[str, Any]:
     """Fit `model` to one site's localizations with LocMoFit.jl. The arguments and the returned dict are those of LocMoFitPy's `run_locmofit` (its docstring describes them): `locs` and `loc_precisions` are (N, D), and `model_points` is (M, 3). Only `model` differs: the name of a LocMoFit.jl model, spelled exactly (`"Ring"`, `"SphericalCap"`, `"DoubleRing"`, `"SpCapRing"`); model objects, other cases and aliases are LocMoFitPy's only."""
@@ -73,6 +74,7 @@ def run_locmofit(
             if signal_prior is None
             else tuple(float(v) for v in signal_prior)
         ),
+        share_prior=None if share_prior is None else float(share_prior),
         history=bool(history),
     )
     hist = None

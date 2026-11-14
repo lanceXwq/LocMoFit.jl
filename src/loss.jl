@@ -3,7 +3,7 @@
 """
     loss(u, p)
 
-The objective of a fit: minus the log posterior of the parameters, per localization, plus the model's penalty. `u` holds the free parameters; `p` (from [`fit_problem`](@ref)) holds the model, the map to all parameters, the unit model (unit points and chart frames) and the rows of each component's points (`ranges`), the localizations and their precisions (`D×N`), and the background: whether there is one, the log of the field of view's volume, and the Beta prior on the signal fraction.
+The objective of a fit: minus the log posterior of the parameters, per localization, plus the model's penalty. `u` holds the free parameters; `p` (from [`fit_problem`](@ref)) holds the model, the map to all parameters, the unit model (unit points and chart frames) and the rows of each component's points (`ranges`), the localizations and their precisions (`D×N`), the background: whether there is one, the log of the field of view's volume, and the Beta prior on the signal fraction, and the Dirichlet prior on the components' shares (derivations/derivation.qmd, A prior on the shares).
 """
 function loss(u, p)
     θ = full_parameters(u, p.parameter_map)
@@ -11,6 +11,7 @@ function loss(u, p)
     lw = log_weights(p.model, θ)
     logw = lw .- logsumexp(lw)
     N = size(p.locs, 2)
+    shares = log_share_prior(p.share_prior, logw)
     if !p.background
         ℓ = log_likelihood(
             p.locs,
@@ -22,7 +23,7 @@ function loss(u, p)
             zero(θ.sigma),
             oftype(θ.sigma, -Inf),
         )
-        return -ℓ / N + penalty(p.model, θ)
+        return -(ℓ + shares) / N + penalty(p.model, θ)
     end
     logπ, log1mπ = -softplus(-θ.logit_prob), -softplus(θ.logit_prob)
     ℓ = log_likelihood(
@@ -33,8 +34,12 @@ function loss(u, p)
     else
         (p.signal_prior[1] - 1) * logπ + (p.signal_prior[2] - 1) * log1mπ
     end
-    return -(ℓ + prior) / N + penalty(p.model, θ)
+    return -(ℓ + prior + shares) / N + penalty(p.model, θ)
 end
+
+# the log density, up to a constant, of the symmetric Dirichlet(α) prior on the components' shares, (α - 1) Σₖ log wₖ, from their logarithms; 0 for a simple model, whose one share is 1
+log_share_prior(::Nothing, logw) = zero(first(logw))
+log_share_prior(α, logw) = (α - 1) * sum(logw)
 
 """
     log_likelihood(locs, loc_prec, points, ranges, σ, logw, a, b)

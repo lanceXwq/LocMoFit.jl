@@ -26,7 +26,7 @@ const BFGS_BACKTRACKING = BFGS(; linesearch=Optim.LineSearches.BackTracking())
 
 """
     fit_problem(model, locs, loc_precisions; init_params, freeze, tie, spacing, point_params, dtype, background,
-                fov_volume, signal_prior) -> (p, u₀)
+                fov_volume, signal_prior, share_prior) -> (p, u₀)
 
 Everything a fit needs: `p` for [`loss`](@ref) and the free parameters `u₀` to start from, with what `init_params` leaves open estimated from the localizations ([`estimate_start`](@ref)). The keywords are those of [`run_locmofit`](@ref).
 """
@@ -43,7 +43,15 @@ function fit_problem(
     background::Bool=true,
     fov_volume::Union{Nothing,Real}=nothing,
     signal_prior::Union{Nothing,Tuple{Real,Real}}=(5, 2),
+    share_prior::Union{Nothing,Real}=5,
 )
+    share_prior === nothing ||
+        share_prior >= 1 ||
+        throw(
+            ArgumentError(
+                "share_prior must be at least 1 (or nothing), got $share_prior: below 1 the prior grows without bound as a share goes to 0",
+            ),
+        )
     size(loc_precisions) == size(locs) || throw(
         DimensionMismatch(
             "loc_precisions must match locs shape; got $(size(loc_precisions)) vs $(size(locs))",
@@ -117,6 +125,7 @@ function fit_problem(
         background=background,
         log_volume=convert(dtype, log(V)),
         signal_prior=signal_prior === nothing ? nothing : convert.(dtype, signal_prior),
+        share_prior=share_prior === nothing ? nothing : convert(dtype, share_prior),
     )
     return p, free_parameters(θ₀, pmap)
 end
@@ -210,9 +219,9 @@ end
 
 """
     run_locmofit(model, locs, loc_precisions; init_params, freeze, tie, max_iter, tol, spacing, point_params, dtype,
-                 background, fov_volume, signal_prior, history)
+                 background, fov_volume, signal_prior, share_prior, history)
 
-Fit `model` to one site's localizations by maximizing the posterior of derivations/derivation.qmd: a mixture of the structure and a uniform background, with a Beta prior on the signal fraction, by BFGS with a backtracking line search (gradients by Enzyme). `model` is a [`Model`](@ref), such as `Ring()` or `Composite(Ring(), SphericalCap())`, or the name of a function in LocMoFit that returns one, such as `"Ring"` or `"DoubleRing"`. A fit runs on one thread. Fitting many sites in threads (`Threads.@threads`) is much faster, but has rarely crashed Julia with memory corruption, for reasons not yet known; separate processes are safe.
+Fit `model` to one site's localizations by maximizing the posterior of derivations/derivation.qmd: a mixture of the structure and a uniform background, with a Beta prior on the signal fraction and a Dirichlet prior on the components' shares, by BFGS with a backtracking line search (gradients by Enzyme). `model` is a [`Model`](@ref), such as `Ring()` or `Composite(Ring(), SphericalCap())`, or the name of a function in LocMoFit that returns one, such as `"Ring"` or `"DoubleRing"`. A fit runs on one thread. Fitting many sites in threads (`Threads.@threads`) is much faster, but has rarely crashed Julia with memory corruption, for reasons not yet known; separate processes are safe.
 
 - `locs`, `loc_precisions`: `D×N` positions and per-axis precisions (standard deviations), in nm, with `D ∈ {2, 3}`. A 2D fit uses the first two coordinates of the model.
 - `init_params`: starting values; unknown names are ignored with a warning. A parameter not given starts from a value estimated from the localizations ([`estimate_start`](@ref); derivations/derivation.qmd, Starting values from the data), unless it is frozen or tied: then, and wherever nothing is estimated, it starts from its default (`default_parameters`, plus `logit_prob` with a background). The estimate covers a `Ring`, a `SphericalCap` and a composite of two of them sharing an axis (such as `DoubleRing` and `SpCapRing`): in 3D the position, the axis and the shape, and for a composite the second component's distance along the axis (`z2`) and the shares (`omega2`); in 2D only the position. Any other model gets only the position of component 1, at the weighted center of the localizations. The blur and the signal fraction start from their defaults. The starting axis is given as `theta`, `phi` (polar angle and azimuth; `thetak`, `phik` for component k, in component 1's frame for k > 1, default 0): the orientation is fitted as the coordinates `vx`, `vy` of a tangent chart centered on it, which start at 0. A starting axis given for component 1, or its orientation frozen, is used instead of the estimated one, and the shape is estimated along it.
@@ -226,6 +235,7 @@ Fit `model` to one site's localizations by maximizing the posterior of derivatio
 - `background`: whether some localizations are background, uniform over the field of view; their share is 1 − logistic(`logit_prob`), fitted from 0.1.
 - `fov_volume`: the volume (area, in 2D) of the field of view the localizations were selected from, in nm³ (nm²). Without it, the bounding box of the localizations is used, which is a little smaller.
 - `signal_prior`: `(a, b)` of the Beta prior on the signal fraction, or `nothing` for none. The default, (5, 2), has its mode at 0.8 and weighs as much as 5 localizations, so it keeps the fraction inside (0, 1) and pulls it toward 0.8 only on small sites.
+- `share_prior`: α of the symmetric Dirichlet prior on the components' shares (Beta(α, α) for two), at least 1, or `nothing` for none; it has no effect on a simple model. It keeps every component's share above 0, so that a component cannot be switched off (derivations/derivation.qmd, A prior on the shares). The default, 5, weighs as much as 4 signal localizations for each component, which moves a share by K(α − 1)(1/K − w)/(n + K(α − 1)) for n signal localizations and K components: with two components and 100 signal localizations, a share of 0.3 becomes 0.315.
 - `history`: also record the loss and the parameters after every iteration (for debugging and videos of the fit).
 
 Returns a `NamedTuple` with:
