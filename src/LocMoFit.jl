@@ -9,6 +9,7 @@ using Optimization
 using OptimizationOptimJL
 
 include("models.jl")
+include("priors.jl")
 include("parameters.jl")
 include("unit models.jl")
 include("transformations.jl")
@@ -20,38 +21,27 @@ include("loss.jl")
 include("rules.jl")
 
 export Ring, SphericalCap, Composite, DoubleRing, SpCapRing, run_locmofit
+export ParamToFit, Flat, Normal, LogNormal, Beta, Dirichlet, Watson, Fixed, Tied
 
 # BFGS rather than L-BFGS: with a few tens of parameters its n×n matrix costs nothing, and it is insensitive to the parameters' different scales (nm, radians, 1/nm), which DynMoFit found to matter for L-BFGS (DynMoFit.jl/NOTES.md)
 const BFGS_BACKTRACKING = BFGS(; linesearch=Optim.LineSearches.BackTracking())
 
 """
-    fit_problem(model, locs, loc_precisions; init_params, freeze, tie, spacing, point_params, dtype, background,
-                fov_volume, signal_prior, share_prior) -> (p, u₀)
+    fit_problem(model, locs, loc_precisions; params, spacing, point_params, dtype, background, fov_volume) -> (p, u₀)
 
-Everything a fit needs: `p` for [`loss`](@ref) and the free parameters `u₀` to start from, with what `init_params` leaves open estimated from the localizations ([`estimate_start`](@ref)). The keywords are those of [`run_locmofit`](@ref).
+Everything a fit needs: `p` for [`loss`](@ref) and the free parameters `u₀` to start from, with the starting values `params` leaves open estimated from the localizations ([`estimate_start`](@ref)). The keywords are those of [`run_locmofit`](@ref).
 """
 function fit_problem(
     model::Model,
     locs::AbstractMatrix{<:Real},
     loc_precisions::AbstractMatrix{<:Real};
-    init_params::NamedTuple=NamedTuple(),
-    freeze=(),
-    tie=(),
+    params::NamedTuple=NamedTuple(),
     spacing::Real=3.0,
     point_params::NamedTuple=NamedTuple(),
     dtype::Type{<:AbstractFloat}=Float64,
     background::Bool=true,
     fov_volume::Union{Nothing,Real}=nothing,
-    signal_prior::Union{Nothing,Tuple{Real,Real}}=(5, 2),
-    share_prior::Union{Nothing,Real}=5,
 )
-    share_prior === nothing ||
-        share_prior >= 1 ||
-        throw(
-            ArgumentError(
-                "share_prior must be at least 1 (or nothing), got $share_prior: below 1 the prior grows without bound as a share goes to 0",
-            ),
-        )
     size(loc_precisions) == size(locs) || throw(
         DimensionMismatch(
             "loc_precisions must match locs shape; got $(size(loc_precisions)) vs $(size(locs))",
@@ -61,31 +51,23 @@ function fit_problem(
     # the starting axes, as theta, phi (thetak, phik for component k), center the orientation charts; they are not parameters
     axes = orientation_names(model)
     axis_names = Tuple(Iterators.flatten(axes))
-    frozen = freeze_names(freeze)
-    frozen_axes = Tuple(k for k in frozen if k in axis_names)
-    isempty(frozen_axes) || throw(
-        ArgumentError(
-            "theta and phi only set the starting axis, $frozen_axes; to keep the " *
-            "orientation, freeze its chart coordinates (vx, vy, or vxk, vyk for component k)",
-        ),
-    )
-    # what init_params leaves open, frozen and tied parameters excepted, starts from the data (derivations/derivation.qmd), along the starting axis of component 1 if it is given or its orientation frozen
+    # params in the optimizer's parameters: starting values, frozen parameters, ties, and priors
+    spec = specification(model, background, params, axes)
+    given, frozen, tie = spec.init, spec.frozen, spec.tie
+    # what params leaves open, frozen and tied parameters excepted, starts from the data (derivations/derivation.qmd), along the starting axis of component 1 if it is given or held
     θa, ϕa = axes[1]
     given_axis =
-        haskey(init_params, θa) ||
-        haskey(init_params, ϕa) ||
-        any(k -> k in frozen, chart_names(model))
-    axis =
-        given_axis ? axis_vector(get(init_params, θa, 0), get(init_params, ϕa, 0)) : nothing
-    targets = map(first, tie_pairs(tie))
-    isopen(k) = !haskey(init_params, k) && !(k in frozen) && !(k in targets)
+        haskey(given, θa) || haskey(given, ϕa) || any(k -> k in frozen, chart_names(model))
+    axis = given_axis ? axis_vector(get(given, θa, 0), get(given, ϕa, 0)) : nothing
+    targets = map(first, tie)
+    isopen(k) = !haskey(given, k) && !(k in frozen) && !(k in targets)
     estimate = if any(isopen, start_names(model, size(locs, 1)))
         estimate_start(model, locs, loc_precisions, axis)
     else
         NamedTuple()
     end
     open = Tuple(k for k in keys(estimate) if isopen(k))
-    init = merge(NamedTuple{open}(estimate), init_params)
+    init = merge(NamedTuple{open}(estimate), given)
     starts = map(
         n -> (convert(dtype, get(init, n[1], 0)), convert(dtype, get(init, n[2], 0))), axes
     )
@@ -93,14 +75,14 @@ function fit_problem(
     θ₀ = default_parameters(model, dtype)
     background && (θ₀ = merge(θ₀, (logit_prob=convert(dtype, log(9)),)))   # signal fraction 0.9
     θ₀ = apply_init(θ₀, Base.structdiff(init, NamedTuple{axis_names}))
-    pmap = ParameterMap(θ₀, frozen, tie_pairs(tie))
+    pmap = ParameterMap(θ₀, frozen, tie)
     θ₀ = full_parameters(free_parameters(θ₀, pmap), pmap)      # with the ties applied
     # the values the points are generated from: point_params in place of the starting values, with the ties applied
     θpoints = if isempty(point_params)
         θ₀
     else
         θp = apply_init(θ₀, point_params)
-        mp = ParameterMap(θp, frozen, tie_pairs(tie))
+        mp = ParameterMap(θp, frozen, tie)
         full_parameters(free_parameters(θp, mp), mp)
     end
     unit = unit_model(model, θpoints, starts; spacing)
@@ -124,8 +106,7 @@ function fit_problem(
         end,
         background=background,
         log_volume=convert(dtype, log(V)),
-        signal_prior=signal_prior === nothing ? nothing : convert.(dtype, signal_prior),
-        share_prior=share_prior === nothing ? nothing : convert(dtype, share_prior),
+        priors=prior_terms(spec.priors, unit, dtype),
     )
     return p, free_parameters(θ₀, pmap)
 end
@@ -218,29 +199,33 @@ function objective(p, u₀)
 end
 
 """
-    run_locmofit(model, locs, loc_precisions; init_params, freeze, tie, max_iter, tol, spacing, point_params, dtype,
-                 background, fov_volume, signal_prior, share_prior, history)
+    run_locmofit(model, locs, loc_precisions; params, max_iter, tol, spacing, point_params, dtype, background,
+                 fov_volume, history)
 
-Fit `model` to one site's localizations by maximizing the posterior of derivations/derivation.qmd: a mixture of the structure and a uniform background, with a Beta prior on the signal fraction and a Dirichlet prior on the components' shares, by BFGS with a backtracking line search (gradients by Enzyme). `model` is a [`Model`](@ref), such as `Ring()` or `Composite(Ring(), SphericalCap())`, or the name of a function in LocMoFit that returns one, such as `"Ring"` or `"DoubleRing"`. A fit runs on one thread. Fitting many sites in threads (`Threads.@threads`) is much faster, but has rarely crashed Julia with memory corruption, for reasons not yet known; separate processes are safe.
+Fit `model` to one site's localizations by maximizing the posterior of derivations/derivation.qmd: a mixture of the structure and a uniform background, with a prior on every quantity (@eq-full-posterior), by BFGS with a backtracking line search (gradients by Enzyme). `model` is a [`Model`](@ref), such as `Ring()` or `Composite(Ring(), SphericalCap())`, or the name of a function in LocMoFit that returns one, such as `"Ring"` or `"DoubleRing"`. A fit runs on one thread. Fitting many sites in threads (`Threads.@threads`) is much faster, but has rarely crashed Julia with memory corruption, for reasons not yet known; separate processes are safe.
 
 - `locs`, `loc_precisions`: `D×N` positions and per-axis precisions (standard deviations), in nm, with `D ∈ {2, 3}`. A 2D fit uses the first two coordinates of the model.
-- `init_params`: starting values; unknown names are ignored with a warning. A parameter not given starts from a value estimated from the localizations ([`estimate_start`](@ref); derivations/derivation.qmd, Starting values from the data), unless it is frozen or tied: then, and wherever nothing is estimated, it starts from its default (`default_parameters`, plus `logit_prob` with a background). The estimate covers a `Ring`, a `SphericalCap` and a composite of two of them sharing an axis (such as `DoubleRing` and `SpCapRing`): in 3D the position, the axis and the shape, and for a composite the second component's distance along the axis (`z2`) and the shares (`omega2`); in 2D only the position. Any other model gets only the position of component 1, at the weighted center of the localizations. The blur and the signal fraction start from their defaults. The starting axis is given as `theta`, `phi` (polar angle and azimuth; `thetak`, `phik` for component k, in component 1's frame for k > 1, default 0): the orientation is fitted as the coordinates `vx`, `vy` of a tangent chart centered on it, which start at 0. A starting axis given for component 1, or its orientation frozen, is used instead of the estimated one, and the shape is estimated along it.
-- `freeze`: names of the parameters kept at their starting values (for the orientation, `vx` and `vy`).
-- `tie`: pairs `target => source`, such as `:r2 => :r1`: the target takes the source's value throughout.
+- `params`: a `NamedTuple` of [`ParamToFit`](@ref), the starting value and the prior of each quantity it names, both in the quantity's own terms; an unknown name throws. A component k of a composite has its number appended to its quantities' names (`x1`, `r1`, `axis2`, …). The quantities and their default priors:
+    - `x`, `y`, `z`: the position of the reference point (a ring's center, a cap's apex), in nm; for component k > 1, in component 1's frame. `Flat()`.
+    - `r` (`Ring`), `s` (`SphericalCap`): the size, in nm (a cap's area is 4πs²). `LogNormal(log(50), 1)`: median 50 nm, 95% between 7 and 355 nm.
+    - `kappa` (`SphericalCap`): the dimensionless curvature κ′ in (−1, 1), from a flat disc at 0 to a whole sphere at ±1. `Flat()`.
+    - `axis`: the axis, as `(theta, phi)`, its polar angle and azimuth; for component k > 1, in component 1's frame. `Flat()`, uniform on the sphere. It is fitted as the coordinates `vx`, `vy` of a tangent chart centered on its starting value.
+    - `sigma`: the blur, in nm, added to every precision in quadrature. `Flat()`.
+    - `signal` (with a background): the signal fraction. `Beta(5, 2)`: mode 0.8, as much as 5 localizations, so it keeps the fraction inside (0, 1) and pulls it toward 0.8 only on small sites.
+    - `shares` (a composite): the components' shares of the signal localizations, as a tuple. `Dirichlet(5)`: as much as 4 signal localizations for each component, so that no component can be switched off; it moves a share by K(α − 1)(1/K − w)/(n + K(α − 1)) for n signal localizations and K components (with two components and 100 signal localizations, a share of 0.3 becomes 0.315).
+  `Fixed()` holds a quantity at its value and `Tied(:r1)` at another quantity's value throughout (derivations/derivation.qmd, Fixed and tied values). A starting value not given is estimated from the localizations ([`estimate_start`](@ref); derivations/derivation.qmd, Starting values from the data), unless the quantity is fixed or tied: then, and wherever nothing is estimated, it starts from its default (`default_parameters`, plus a signal fraction of 0.9 with a background). The estimate covers a `Ring`, a `SphericalCap` and a composite of two of them sharing an axis (such as `DoubleRing` and `SpCapRing`): in 3D the position, the axis and the shape, and for a composite the second component's distance along the axis (`z2`) and the shares; in 2D only the position. Any other model gets only the position of component 1, at the weighted center of the localizations. The blur and the signal fraction start from their defaults, and an axis not estimated from (0, 0), along z. An axis given for component 1, or held, is used instead of the estimated one, and the shape is estimated along it.
 - `max_iter`: the most iterations the optimizer takes.
 - `tol`: the fit has converged when no component of the gradient of [`loss`](@ref) exceeds `tol`. The default, 1e-4, leaves the parameters much closer to the optimum than their statistical error (a position within about 0.005 nm for a ring of 100 localizations, whose error is about 0.7 nm).
 - `spacing`: the distance between model points, in nm. The points are generated once, from the starting values, and stay fixed during the fit.
 - `point_params`: values that replace the starting values only for generating the points (with the ties applied), such as `(r=50,)`: then the number of points comes from a ring of radius 50 nm, whatever the starting radius. Only the shape parameters that set the number of points matter: a ring's `r` and a cap's `s` (`r1`, `s2`, … in a composite). Unknown names are ignored with a warning.
 - `dtype`: the floating-point type of the fit, `Float64` by default. `Float32` is faster on large models (a cap fit 1.6×) but can stop early, before the gradient reaches `tol` (a known issue: NOTES.md).
-- `background`: whether some localizations are background, uniform over the field of view; their share is 1 − logistic(`logit_prob`), fitted from 0.1.
+- `background`: whether some localizations are background, uniform over the field of view; their share is 1 − `signal`.
 - `fov_volume`: the volume (area, in 2D) of the field of view the localizations were selected from, in nm³ (nm²). Without it, the bounding box of the localizations is used, which is a little smaller.
-- `signal_prior`: `(a, b)` of the Beta prior on the signal fraction, or `nothing` for none. The default, (5, 2), has its mode at 0.8 and weighs as much as 5 localizations, so it keeps the fraction inside (0, 1) and pulls it toward 0.8 only on small sites.
-- `share_prior`: α of the symmetric Dirichlet prior on the components' shares (Beta(α, α) for two), at least 1, or `nothing` for none; it has no effect on a simple model. It keeps every component's share above 0, so that a component cannot be switched off (derivations/derivation.qmd, A prior on the shares). The default, 5, weighs as much as 4 signal localizations for each component, which moves a share by K(α − 1)(1/K − w)/(n + K(α − 1)) for n signal localizations and K components: with two components and 100 signal localizations, a share of 0.3 becomes 0.315.
 - `history`: also record the loss and the parameters after every iteration (for debugging and videos of the fit).
 
 Returns a `NamedTuple` with:
 
-- `parameters`: all parameters, frozen and tied ones included, as a `NamedTuple`;
+- `parameters`: all of the optimizer's parameters, held and tied ones included, as a `NamedTuple` (`logit_prob` for the signal fraction, `omega2`, … for the shares, `eta` for a cap's κ′ = tanh(`eta`), `vx`, `vy` for an axis);
 - `signal_fraction`: logistic(`logit_prob`), or `nothing` without a background;
 - `weights`: the components' shares of the signal localizations (one share, 1, for a simple model);
 - `components`: each component in the world frame: its position, its axis (`axis`, `theta`, `phi`), and its shape (see [`components`](@ref));

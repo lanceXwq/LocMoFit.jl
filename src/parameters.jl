@@ -56,10 +56,3 @@ function full_parameters(u::AbstractVector, m::ParameterMap{names}) where {names
     θ = muladd(m.S, u, m.base)
     return NamedTuple{names}(ntuple(i -> θ[i], Val(length(names))))
 end
-
-freeze_names(freeze::Symbol) = (freeze,)
-freeze_names(freeze::AbstractString) = (Symbol(freeze),)
-freeze_names(freeze) = Tuple(Symbol(k) for k in freeze)
-
-tie_pairs(tie::Pair) = (Symbol(first(tie)) => Symbol(last(tie)),)
-tie_pairs(tie) = Tuple(Symbol(first(p)) => Symbol(last(p)) for p in tie)

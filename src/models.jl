@@ -6,7 +6,7 @@ A geometric model: a [`SimpleModel`](@ref) (one shape) or a [`Composite`](@ref) 
 - `default_parameters(model, T)`: a `NamedTuple` of scalars of type `T`, which gives the parameter names and their default starting values;
 - `unit_points(model, θ; spacing)`: the points the model is built from (a matrix, or a tuple of matrices for a composite), generated once from the starting values θ, `spacing` nm apart;
 - `model_points(model, unit_model, θ)`: the `3×M` model points for the parameters θ (a `NamedTuple`), without changing the unit model (`(points, chart)` from [`fit_problem`](@ref): the unit points and the frame of the orientation's chart, or a tuple of them for a composite);
-- `penalty(model, θ)`: soft constraints added to the loss.
+- `quantities(model, background)`: the quantities that [`ParamToFit`](@ref) gives starting values and priors for, each computed from the parameters, with its default prior.
 
 Every model has a blur `sigma`, which [`loss`](@ref) combines with the localization precisions.
 """
@@ -20,10 +20,10 @@ A model of one shape. It defines only the shape, in its own frame (with its refe
 - `shape_parameters(model, T)`: the shape's parameters and their defaults (e.g. a ring's radius `r`);
 - `unit_points(model, shape; spacing)`, with `shape` holding (at least) the shape parameters;
 - `local_points(model, unit_points, shape)`: the `3×M` points in the model's own frame;
-- `shape_penalty(model, shape)`;
+- `shape_quantities(model, suffix)`: the shape's quantities, as `name => (quantity, default prior)` with `suffix` appended to the names (such as a ring's radius, `Size{:r}()` with the default prior on sizes);
 - `shape_summary(model, shape)`: the shape's size and shape in the usual terms (e.g. a cap's radius and area), which [`components`](@ref) reports.
 
-The pose places it: the position `x`, `y`, `z` of its reference point and its axis, given by the coordinates `vx`, `vy` of a tangent chart centered on the starting axis ([`chart_rotation`](@ref)): `vx = vy = 0` is the starting axis, which `run_locmofit` takes as `theta`, `phi` (polar angle and azimuth) from `init_params`. Its parameters are `(x, y, z, shape..., vx, vy, sigma)`.
+The pose places it: the position `x`, `y`, `z` of its reference point and its axis, given by the coordinates `vx`, `vy` of a tangent chart centered on the starting axis ([`chart_rotation`](@ref)): `vx = vy = 0` is the starting axis, the `axis` that `run_locmofit` takes as `(theta, phi)` (polar angle and azimuth) in `params`. Its parameters are `(x, y, z, shape..., vx, vy, sigma)`.
 """
 abstract type SimpleModel <: Model end
 
@@ -52,9 +52,6 @@ function model_points(m::SimpleModel, unit_model, θ)
         θ.z,
     )
 end
-
-# the chart needs no bounds on the orientation, so only the shape has penalties
-penalty(m::SimpleModel, θ) = shape_penalty(m, θ)
 
 # the log weights of the components, before normalization; a simple model has one component
 log_weights(::SimpleModel, θ) = (zero(θ.sigma),)

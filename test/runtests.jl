@@ -10,7 +10,6 @@ using LocMoFit:
     unit_points,
     unit_model,
     model_points,
-    penalty,
     log_likelihood,
     likelihood_pass,
     exp_nonpositive,
@@ -19,6 +18,7 @@ using LocMoFit:
 using LinearAlgebra: norm, dot, cross, normalize
 using Statistics: mean
 using Test
+include("tutorial.jl")      # start_params, and the tutorial sites for fit.jl
 
 # Fixed test inputs (no RNG): a deterministic sequence in (-1, 1).
 pseudo(i, j) = sin(12.9898i + 78.233j) * 43758.5453 % 1
@@ -123,28 +123,49 @@ function test_data(model, θ, starts; D=3, every=7)
     precs = [3 + 4 * abs(pseudo(d + 10, n)) for d in 1:D, n in axes(Y, 2)]
     return locs, precs
 end
-function problem(model, θ, starts, locs, precs; background=true, kwargs...)
+# the parameters without the chart coordinates vx, vy (vx1, vy1, …), which params cannot give: an axis starts at its chart's center
+without_chart(θ) = NamedTuple(k => v for (k, v) in pairs(θ) if first(string(k)) != 'v')
+# θ with the fractions and the starting axes as params (start_params: each quantity at its value in θ), held (`fixed`) or with `priors` as named
+function case_params(model, θ, starts; background=true, kwargs...)
     f = if background
         fractions(model)
     else
         Base.structdiff(fractions(model), NamedTuple{(:logit_prob,)})
     end
-    return fit_problem(
+    return start_params(merge(without_chart(θ), f, axes_init(model, starts)); kwargs...)
+end
+# the problem of a fit at θ (`params` added to or replacing case_params), and its free parameters at θ, chart coordinates included
+function problem(
+    model,
+    θ,
+    starts,
+    locs,
+    precs;
+    background=true,
+    fixed=(),
+    priors=(;),
+    params=(;),
+    spacing=SPACING,
+    fov=FOV,
+    kwargs...,
+)
+    p, u = fit_problem(
         model,
         locs,
         precs;
-        init_params=merge(θ, f, axes_init(model, starts)),
-        spacing=SPACING,
-        fov_volume=FOV^size(locs, 1),
+        params=merge(case_params(model, θ, starts; background, fixed, priors), params),
+        spacing,
+        fov_volume=fov^size(locs, 1),
         background,
         kwargs...,
     )
+    chart = NamedTuple(k => v for (k, v) in pairs(θ) if first(string(k)) == 'v')
+    return p,
+    free_parameters(merge(full_parameters(u, p.parameter_map), chart), p.parameter_map)
 end
 
-# The likelihood of derivations/derivation.qmd with plain loops: per localization, the mean of the Gaussian densities over each component's points (variances precision² + σ²), the components weighted by w, mixed with a uniform background of density 1/V at signal fraction f; minus the log posterior with the Beta(a, b) prior on f and the Dirichlet(α) prior on w, per localization.
-function reference_loss(
-    locs, precs, Ys, w, σ; f=nothing, V=1.0, prior=nothing, share_prior=nothing
-)
+# The likelihood of derivations/derivation.qmd with plain loops: per localization, the mean of the Gaussian densities over each component's points (variances precision² + σ²), the components weighted by w, mixed with a uniform background of density 1/V at signal fraction f; minus the log posterior with the log prior `logprior`, per localization.
+function reference_loss(locs, precs, Ys, w, σ; f=nothing, V=1.0, logprior=0.0)
     D, N = size(locs)
     total = 0.0
     for n in 1:N
@@ -156,13 +177,78 @@ function reference_loss(
         )
         total += log(f === nothing ? ps : f * ps + (1 - f) / V)
     end
-    logprior = if prior === nothing || f === nothing
-        0.0
-    else
-        (prior[1] - 1) * log(f) + (prior[2] - 1) * log(1 - f)
+    return -(total + logprior) / N
+end
+
+# The default priors as run_locmofit documents them: a log-normal of median 50 nm and logarithmic spread 1 on every ring's radius and cap's scale, Beta(5, 2) on the signal fraction, Dirichlet(5) on a composite's shares, and flat otherwise.
+function default_priors(model, background)
+    return merge(
+        NamedTuple(k => LogNormal(log(50), 1) for k in names_of(model, (:r, :s))),
+        background ? (signal=Beta(5, 2),) : (;),
+        model isa Composite ? (shares=Dirichlet(5),) : (;),
+    )
+end
+# the names of a model's quantities among `of` (a ring's :r, a cap's :s and :kappa), with the component's number for a composite
+names_of(::Ring, of) = filter(in(of), (:r,))
+names_of(::SphericalCap, of) = filter(in(of), (:s, :kappa))
+function names_of(c::Composite, of)
+    return Tuple(
+        Iterators.flatten(
+            map(n -> Symbol(n, k), names_of(m, of)) for (k, m) in enumerate(c.components)
+        ),
+    )
+end
+# Every kind of prior that is flat by default, on the case's model: a normal density on the height (z, or z2 in component 1's frame), on κ′ and, centered at 0, on the blur; a log-normal on the sizes, and a Watson density on every axis (a girdle for the second).
+function every_prior(model)
+    composite = model isa Composite
+    return merge(
+        (composite ? (z2=Normal(70, 15),) : (z=Normal(2, 4),)),
+        NamedTuple(k => LogNormal(log(40), 0.5) for k in names_of(model, (:r, :s))),
+        NamedTuple(k => Normal(0.3, 0.2) for k in names_of(model, (:kappa,))),
+        (sigma=Normal(0, 10),),
+        if composite
+            (axis1=Watson(0.5, 1.0, 3.0), axis2=Watson(0.1, -0.3, -2.0))
+        else
+            (axis=Watson(0.5, 1.0, 3.0),)
+        end,
+    )
+end
+# The log prior of derivations/derivation.qmd (Priors on every parameter) with plain formulas, for the priors `priors` at the parameters θ: each density at its quantity, a size's magnitude, a cap's κ′ = sign(s)·tanh(η), an axis by the independent construction `pose` (for component 2, in component 1's frame), the signal fraction and the shares.
+function reference_log_prior(model, θ, starts, priors)
+    total = 0.0
+    for (name, prior) in pairs(priors)
+        s = string(name)
+        q = if name == :signal
+            1 / (1 + exp(-θ.logit_prob))
+        elseif name == :shares
+            shares(model, θ)
+        elseif startswith(s, "axis")
+            k = s[5:end]
+            pose(starts[k == "" ? 1 : parse(Int, k)], θ[Symbol(:vx, k)], θ[Symbol(:vy, k)])[
+                :, 3
+            ]
+        elseif startswith(s, "kappa")
+            sign(θ[Symbol(:s, s[6:end])]) * tanh(θ[Symbol(:eta, s[6:end])])
+        elseif name == :sigma || s[1] in ('r', 's')
+            abs(θ[name])
+        else
+            θ[name]
+        end
+        total += if prior isa Normal
+            -(q - prior.mean)^2 / (2prior.sd^2)
+        elseif prior isa LogNormal
+            -log(q) - (log(q) - prior.mu)^2 / (2prior.sigma^2)
+        elseif prior isa Watson
+            prior.kappa * dot(direction(prior.theta, prior.phi), q)^2
+        elseif prior isa Beta
+            (prior.a - 1) * log(q) + (prior.b - 1) * log(1 - q)
+        elseif prior isa Dirichlet
+            (prior.alpha - 1) * sum(log, q)
+        else
+            0.0
+        end
     end
-    logshares = share_prior === nothing ? 0.0 : (share_prior - 1) * sum(log, w)
-    return -(total + logprior + logshares) / N
+    return total
 end
 # each component's points (first D rows), and the components' shares, from the parameters
 parts(p, θ, D) = [model_points(p.model, p.unit_model, θ)[1:D, r] for r in p.ranges]
@@ -310,31 +396,34 @@ end
 end
 
 @testset "loss against a reference" begin
-    for (_, model, θ, starts) in CASES,
-        D in (3, 2),
-        background in (true, false),
-        prior in ((197.0, 50.0), (3.0, 2.0), nothing),
-        α in (5.0, 2.5, nothing)
-
-        !background && prior !== (197.0, 50.0) && continue          # the signal prior only matters with a background
-        locs, precs = test_data(model, θ, starts; D)
-        p, u = problem(
-            model, θ, starts, locs, precs; background, signal_prior=prior, share_prior=α
+    # the posterior with its default priors, then with each default replaced (the signal fraction's, the shares', and flat sizes) and with every other quantity given a prior
+    for (_, model, θ, starts) in CASES, D in (3, 2), background in (true, false)
+        composite = model isa Composite
+        variants = (
+            (;),
+            (background ? (signal=Beta(197, 50),) : (;)),
+            (background ? (signal=Flat(),) : (;)),
+            (composite ? (shares=Dirichlet(2.5),) : (;)),
+            (composite ? (shares=Flat(),) : (;)),
+            NamedTuple(k => Flat() for k in names_of(model, (:r, :s))),
+            every_prior(model),
         )
-        θp = full_parameters(u, p.parameter_map)
-        @test penalty(model, θp) == 0
-        f = background ? 1 / (1 + exp(-θp.logit_prob)) : nothing
-        @test loss(u, p) ≈ reference_loss(
-            locs,
-            precs,
-            parts(p, θp, D),
-            shares(model, θp),
-            θp.sigma;
-            f,
-            V=FOV^D,
-            prior,
-            share_prior=α,
-        ) rtol = 1e-10
+        locs, precs = test_data(model, θ, starts; D)
+        for priors in variants
+            p, u = problem(model, θ, starts, locs, precs; background, priors)
+            θp = full_parameters(u, p.parameter_map)
+            used = merge(default_priors(model, background), priors)
+            @test loss(u, p) ≈ reference_loss(
+                locs,
+                precs,
+                parts(p, θp, D),
+                shares(model, θp),
+                θp.sigma;
+                f=background ? 1 / (1 + exp(-θp.logit_prob)) : nothing,
+                V=FOV^D,
+                logprior=reference_log_prior(model, θp, starts, used),
+            ) rtol = 1e-10
+        end
     end
 end
 
@@ -347,27 +436,40 @@ end
     )
     locs = hcat(ring(n1, 0.0), ring(n2, 2000.0))
     precs = fill(5.0, size(locs))
-    θ = merge(default_parameters(DoubleRing(), Float64), (r1=r, r2=r, z2=2000.0, sigma=1.0))
-    fixed = Tuple(k for k in keys(θ) if k != :omega2)
+    θ = (
+        x1=0.0,
+        y1=0.0,
+        z1=0.0,
+        r1=r,
+        theta1=0.0,
+        phi1=0.0,
+        x2=0.0,
+        y2=0.0,
+        z2=2000.0,
+        r2=r,
+        theta2=0.0,
+        phi2=0.0,
+        sigma=1.0,
+    )
     for α in (5.0, 2.0, nothing)
         fit = run_locmofit(
             DoubleRing(),
             locs,
             precs;
-            init_params=θ,
-            freeze=fixed,
+            params=merge(
+                start_params(θ; fixed=keys(start_params(θ))),
+                (shares=ParamToFit(α === nothing ? Flat() : Dirichlet(α)),),
+            ),
             background=false,
-            share_prior=α,
             tol=1e-10,
         )
         expected = α === nothing ? n2 / (n1 + n2) : (n2 + α - 1) / (n1 + n2 + 2(α - 1))
         @test fit.weights[2] ≈ expected rtol = 1e-6
     end
-    @test_throws ArgumentError fit_problem(Ring(), locs, precs; share_prior=0.5)
 end
 
 @testset "changing the length unit" begin
-    # every length divided by L (positions, radii, scales, the blur, the spacing): the posterior's geometry is the same, and the loss (minus the log posterior per localization) drops by D·log L exactly
+    # every length divided by L (positions, radii, scales, the blur, the spacing, and the log-normal priors' medians): the posterior's geometry is the same, and the loss (minus the log posterior per localization) drops by (D + J/N)·log L exactly, with J log-normal priors (derivations/derivation.qmd, @eq-units-priors)
     L = 2.5
     scaled(θ) = NamedTuple{keys(θ)}(
         Tuple(
@@ -378,27 +480,116 @@ end
     for (_, model, θ, starts) in CASES, D in (3, 2)
         locs, precs = test_data(model, θ, starts; D)
         p, u = problem(model, θ, starts, locs, precs)
-        pL, uL = fit_problem(
+        sizes = names_of(model, (:r, :s))
+        pL, uL = problem(
             model,
+            scaled(θ),
+            starts,
             locs ./ L,
             precs ./ L;
-            init_params=merge(scaled(θ), fractions(model), axes_init(model, starts)),
+            priors=NamedTuple(k => LogNormal(log(50 / L), 1) for k in sizes),
             spacing=SPACING / L,
-            fov_volume=(FOV / L)^D,
+            fov=FOV / L,
         )
-        @test loss(uL, pL) ≈ loss(u, p) - D * log(L) rtol = 1e-10
+        N = size(locs, 2)
+        @test loss(uL, pL) ≈ loss(u, p) - (D + length(sizes) / N) * log(L) rtol = 1e-10
     end
 end
 
-@testset "penalties" begin
-    # soft bounds on sizes only (radius and scale ≥ 1 nm), each a squared hinge; orientations need none
-    @test penalty(Ring(), merge(CASES[1][3], (r=0.5, vx=10.0))) ≈ (1 / 0.5^2 - 1)^2
-    @test penalty(SphericalCap(), merge(CASES[2][3], (s=0.5, eta=-5.0))) ≈ (1 / 0.5^2 - 1)^2
-    # a composite adds its components' penalties; a second ring smaller than the first is not penalized
-    @test penalty(DoubleRing(), merge(CASES[3][3], (r1=0.5, r2=0.25))) ≈
-        (1 / 0.5^2 - 1)^2 + (1 / 0.25^2 - 1)^2
-    @test penalty(DoubleRing(), merge(CASES[3][3], (r2=40.0,))) == 0
-    @test penalty(SpCapRing(), merge(CASES[4][3], (s2=0.5,))) ≈ (1 / 0.5^2 - 1)^2
+@testset "priors" begin
+    # where the likelihood does not depend on a quantity, the fit ends at its prior's mode (derivations/derivation.qmd, Priors on every parameter): the height of a ring in 2D under a normal density; and the cap of a SpCapRing whose share is held at 10⁻²⁰, fitted to a ring's localizations with a background, so that the cap's density is negligible next to the background's: its height z2 at the normal's mean, its scale at the log-normal's mode exp(μ - σ²), its κ′ at the normal's mean, and its axis along ±μ of the Watson density
+    (_, model, θ, starts) = CASES[1]
+    locs, precs = test_data(model, θ, starts; D=2)
+    held = Tuple(k for k in keys(case_params(model, θ, starts)) if k != :z)
+    fit = run_locmofit(
+        model,
+        locs,
+        precs;
+        params=case_params(model, θ, starts; fixed=held, priors=(z=Normal(30, 10),)),
+        spacing=SPACING,
+        tol=1e-10,
+    )
+    @test fit.parameters.z ≈ 30 rtol = 1e-8
+
+    ring = (x1=3.0, y1=-2.0, z1=5.0, r1=40.0, theta1=0.4, phi1=1.1)
+    locs, precs = test_data(
+        Ring(), (x=3.0, y=-2.0, z=5.0, r=40.0, vx=0.0, vy=0.0, sigma=2.0), ((0.4, 1.1),)
+    )
+    start = merge(
+        ring,
+        (x2=0.0, y2=0.0, z2=85.0, s2=30.0, eta2=atanh(0.5), theta2=0.2, phi2=-0.7),
+        (sigma=2.0, logit_prob=1.2),
+    )
+    free = (:z2, :s2, :kappa2, :axis2)
+    params = merge(
+        start_params(
+            start; fixed=Tuple(k for k in keys(start_params(start)) if !(k in free))
+        ),
+        (shares=ParamToFit((1.0, 1e-20), Fixed()),),
+    )
+    priors = (
+        z2=Normal(70, 5),
+        s2=LogNormal(log(40), 0.5),
+        kappa2=Normal(0.3, 0.2),
+        axis2=Watson(0.5, 1.0, 3.0),
+    )
+    params = merge(
+        params, NamedTuple(k => ParamToFit(params[k].value, priors[k]) for k in free)
+    )
+    fit = run_locmofit(SpCapRing(), locs, precs; params, spacing=SPACING, tol=1e-10)
+    θf = fit.parameters
+    @test θf.z2 ≈ 70 rtol = 1e-8
+    @test abs(θf.s2) ≈ 40exp(-0.5^2) rtol = 1e-8
+    @test sign(θf.s2) * tanh(θf.eta2) ≈ 0.3 rtol = 1e-8
+    @test abs(dot(pose((0.2, -0.7), θf.vx2, θf.vy2)[:, 3], direction(0.5, 1.0))) ≈ 1 rtol =
+        1e-10
+
+    # what params accepts
+    locs, precs = test_data(model, θ, starts)
+    @test_throws ArgumentError fit_problem(
+        Ring(), locs, precs; params=(r2=ParamToFit(1.0),)
+    )       # not a quantity of the model
+    @test_throws ArgumentError fit_problem(Ring(), locs, precs; params=(r=50.0,))                  # not a ParamToFit
+    @test_throws ArgumentError fit_problem(
+        Ring(), locs, precs; params=(x=ParamToFit(LogNormal(0, 1)),)
+    )     # a log-normal fits sizes only
+    @test_throws ArgumentError fit_problem(
+        Ring(), locs, precs; params=(r=ParamToFit(Watson(0, 0, 1)),)
+    )    # a Watson density fits axes only
+    @test_throws ArgumentError fit_problem(
+        Ring(), locs, precs; params=(axis=ParamToFit(Normal(0, 1)),)
+    )
+    @test_throws ArgumentError fit_problem(
+        Ring(), locs, precs; params=(signal=ParamToFit(Dirichlet(5)),)
+    )
+    @test_throws ArgumentError fit_problem(
+        Ring(), locs, precs; background=false, params=(signal=ParamToFit(0.5),)
+    )   # no signal fraction without a background
+    @test_throws ArgumentError fit_problem(
+        Ring(), locs, precs; params=(signal=ParamToFit(1.0),)
+    )  # outside (0, 1)
+    @test_throws ArgumentError fit_problem(
+        SphericalCap(), locs, precs; params=(kappa=ParamToFit(1.0),)
+    )
+    @test_throws ArgumentError fit_problem(
+        Ring(), locs, precs; params=(axis=ParamToFit(0.3),)
+    )   # an axis is (theta, phi)
+    @test_throws ArgumentError fit_problem(
+        DoubleRing(), locs, precs; params=(shares=ParamToFit((0.5, 0.3, 0.2)),)
+    )
+    @test_throws ArgumentError fit_problem(
+        DoubleRing(), locs, precs; params=(r2=ParamToFit(Tied(:z1)),)
+    )   # a size tied to a position
+    @test_throws ArgumentError fit_problem(
+        DoubleRing(), locs, precs; params=(r2=ParamToFit(Tied(:r3)),)
+    )
+    @test_throws ArgumentError fit_problem(
+        DoubleRing(), locs, precs; params=(axis2=ParamToFit(Tied(:axis1)),)
+    )
+    @test_throws ArgumentError Normal(0, 0)
+    @test_throws ArgumentError LogNormal(0, -1)
+    @test_throws ArgumentError Beta(0.5, 2)
+    @test_throws ArgumentError Dirichlet(0.5)
 end
 
 @testset "composites" begin
@@ -457,7 +648,7 @@ end
     @test full_parameters(u, m) == θ
     u[:r] = 45.0
     @test full_parameters(u, m) == merge(θ, (r=45.0,))
-    pf, uf = problem(model, θ, starts, locs, precs; freeze=(:z, :sigma))
+    pf, uf = problem(model, θ, starts, locs, precs; fixed=(:z, :sigma))
     uf[:r] = 45.0
     @test loss(uf, pf) ≈ loss(
         problem(model, merge(θ, (r=45.0,)), starts, locs, precs)[2],
@@ -465,8 +656,6 @@ end
     )
     @test_throws ArgumentError ParameterMap(θ, (:w,))
     @test_throws ArgumentError ParameterMap(θ, keys(θ))
-    # theta, phi set the starting axis; the orientation is frozen through its chart coordinates
-    @test_throws ArgumentError problem(model, θ, starts, locs, precs; freeze=(:theta,))
 end
 
 @testset "ties" begin
@@ -489,14 +678,16 @@ end
 end
 
 @testset "gradient" begin
-    # Enzyme's gradient of the loss (through the rule for the log-likelihood) against central differences, for every model (with the background, the prior and the weights); DoubleRing with its radii tied and its second orientation frozen, and once without a background; SpCapRing also in 2D
+    # Enzyme's gradient of the loss (through the rule for the log-likelihood) against central differences, for every model (with the background, the default priors and the weights); DoubleRing with its radii tied and its second axis held, and once without a background; SpCapRing also in 2D; SphericalCap and SpCapRing with every kind of prior
     for (_, model, θ, starts, kwargs, D) in (
         (CASES[1]..., (;), 3),
         (CASES[2]..., (;), 3),
-        (CASES[3]..., (freeze=(:vx2, :vy2), tie=(:r2 => :r1,)), 3),
+        (CASES[3]..., (fixed=(:axis2,), params=(r2=ParamToFit(Tied(:r1)),)), 3),
         (CASES[4]..., (;), 3),
         (CASES[3]..., (background=false,), 3),
         (CASES[4]..., (;), 2),
+        (CASES[2]..., (priors=every_prior(CASES[2][2]),), 3),
+        (CASES[4]..., (priors=every_prior(CASES[4][2]),), 3),
     )
         locs, precs = test_data(model, θ, starts; D)
         p, u = problem(model, θ, starts, locs, precs; kwargs...)
@@ -518,9 +709,11 @@ end
 @testset "run_locmofit" begin
     (_, model, θ, starts) = CASES[1]
     locs, precs = test_data(model, θ, starts; every=3)
-    init = merge(θ, (x=0.0, z=0.0, r=30.0, sigma=1.0), axes_init(model, starts))
+    init = merge(
+        without_chart(θ), (x=0.0, z=0.0, r=30.0, sigma=1.0), axes_init(model, starts)
+    )
     r = run_locmofit(
-        "Ring", locs, precs; init_params=init, freeze=(:sigma,), spacing=SPACING
+        "Ring", locs, precs; params=start_params(init; fixed=(:sigma,)), spacing=SPACING
     )
     @test r.history === nothing
     @test r.parameters.sigma == 1.0                                     # frozen
@@ -531,7 +724,7 @@ end
         chart_rotation(r.unit_model.chart, r.parameters.vx, r.parameters.vy)[:, 3]
     @test r.components[1].axis ≈ direction(r.components[1].theta, r.components[1].phi)
     p0, u0 = fit_problem(
-        Ring(), locs, precs; init_params=init, freeze=(:sigma,), spacing=SPACING
+        Ring(), locs, precs; params=start_params(init; fixed=(:sigma,)), spacing=SPACING
     )
     @test r.loss < loss(u0, p0)
     @test r.unit_model.points == unit_points(model, init; spacing=SPACING)   # not changed by the fit
@@ -541,8 +734,7 @@ end
         "Ring",
         locs,
         precs;
-        init_params=init,
-        freeze=(:sigma,),
+        params=start_params(init; fixed=(:sigma,)),
         spacing=SPACING,
         history=true,
     )
@@ -555,7 +747,7 @@ end
         "Ring",
         locs,
         precs;
-        init_params=merge(init, (theta=π,)),
+        params=start_params(merge(init, (theta=π,))),
         background=false,
         spacing=SPACING,
         max_iter=5,
@@ -571,8 +763,7 @@ end
             name,
             locs,
             precs;
-            init_params=merge(θ, axes_init(model, starts)),
-            freeze=(:sigma,),
+            params=case_params(model, θ, starts; fixed=(:sigma,)),
             spacing=SPACING,
             max_iter=5,
         )
@@ -586,8 +777,7 @@ end
         Composite(Ring(), Ring()),
         locs,
         precs;
-        init_params=merge(θ, axes_init(model, starts)),
-        tie=(:r2 => :r1,),
+        params=merge(case_params(model, θ, starts), (r2=ParamToFit(Tied(:r1)),)),
         spacing=SPACING,
         max_iter=20,
     )
@@ -597,14 +787,19 @@ end
 end
 
 @testset "point_params" begin
-    # the number of points comes from point_params (ceil(2πr/spacing) for a ring, ceil(4πs²/spacing²) for a cap); the starting values from init_params, frozen or not
+    # the number of points comes from point_params (ceil(2πr/spacing) for a ring, ceil(4πs²/spacing²) for a cap); the starting values from params, held or not
     (_, model, θ, starts) = CASES[1]
     locs, precs = test_data(model, θ, starts; every=3)
     npoints(p) =
         map(u -> size(u.points, 2), p.unit_model isa Tuple ? p.unit_model : (p.unit_model,))
-    p80, u80 = fit_problem(Ring(), locs, precs; init_params=(r=80.0,), spacing=3.0)
+    p80, u80 = fit_problem(Ring(), locs, precs; params=(r=ParamToFit(80.0),), spacing=3.0)
     p50, u50 = fit_problem(
-        Ring(), locs, precs; init_params=(r=80.0,), point_params=(r=50.0,), spacing=3.0
+        Ring(),
+        locs,
+        precs;
+        params=(r=ParamToFit(80.0),),
+        point_params=(r=50.0,),
+        spacing=3.0,
     )
     @test npoints(p80) == (ceil(Int, 2π * 80 / 3),)
     @test npoints(p50) == (ceil(Int, 2π * 50 / 3),)
@@ -613,8 +808,7 @@ end
         Ring(),
         locs,
         precs;
-        init_params=(r=80.0,),
-        freeze=(:r,),
+        params=(r=ParamToFit(80.0, Fixed()),),
         point_params=(r=50.0,),
         spacing=3.0,
     )
@@ -627,8 +821,7 @@ end
         DoubleRing(),
         locs,
         precs;
-        init_params=(r1=70.0,),
-        tie=(:r2 => :r1,),
+        params=(r1=ParamToFit(70.0), r2=ParamToFit(Tied(:r1))),
         point_params=(r1=40.0,),
         spacing=3.0,
     )
@@ -692,21 +885,21 @@ end
     @test [e.x1, e.y1, e.z1] ≈ c - 32.5a && e.r1 ≈ 35 && e.r2 ≈ 35
     @test e.z2 ≈ 65 && abs(e.omega2) < 1e-12
 
-    # fit_problem: given values are kept, frozen ones not given keep their defaults, a tie's target follows its source, and the rest is estimated
+    # fit_problem: given values are kept, held ones not given keep their defaults, a tie's target follows its source, and the rest is estimated
     p, u = fit_problem(
         DoubleRing(),
         two,
         fill(2.0, size(two));
-        init_params=(r1=50.0,),
-        freeze=(:z1,),
-        tie=(:r2 => :r1,),
+        params=(r1=ParamToFit(50.0), z1=ParamToFit(Fixed()), r2=ParamToFit(Tied(:r1))),
     )
     θ = full_parameters(u, p.parameter_map)
     @test θ.r1 == 50 && θ.r2 == 50 && θ.z1 == 0
     @test [θ.x1, θ.y1] ≈ (c - 32.5a)[1:2] && θ.z2 ≈ 65
     @test p.unit_model[1].chart[:, 3] ≈ a
     # a starting axis given is used
-    p, _ = fit_problem(DoubleRing(), two, fill(2.0, size(two)); init_params=(theta1=0.0,))
+    p, _ = fit_problem(
+        DoubleRing(), two, fill(2.0, size(two)); params=(axis1=ParamToFit((0.0, 0.0)),)
+    )
     @test p.unit_model[1].chart[:, 3] ≈ [0, 0, 1]
     # in 2D only the position is estimated
     p, u = fit_problem(Ring(), ring[1:2, :], fill(2.0, 2, size(ring, 2)))

@@ -15,6 +15,9 @@ end
 
 local_points(::Ring, unit_ring, shape) = shape.r .* unit_ring
 
-shape_penalty(::Ring, shape) = sq_hinge(1 / shape.r^2 - 1)
+# the radius, with the default prior on sizes
+function shape_quantities(::Ring, suffix)
+    return (Symbol(:r, suffix) => (Size{Symbol(:r, suffix)}(), SIZE_PRIOR),)
+end
 
 shape_summary(::Ring, shape) = (r=shape.r,)

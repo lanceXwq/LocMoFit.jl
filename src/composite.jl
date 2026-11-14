@@ -71,13 +71,14 @@ end
 @generated log_weights(::Composite{C}, θ::NamedTuple) where {C} =
     Expr(:tuple, :(zero(θ.sigma)), (:(θ.$(Symbol(:omega, k))) for k in 2:fieldcount(C))...)
 
-# each component's own penalties (the shapes'; the orientations need none)
-@generated function penalty(c::Composite{C}, θ::NamedTuple) where {C}
-    terms = [
-        :(penalty(c.components[$k], component_parameters(c, θ, Val($k)))) for
-        k in 1:fieldcount(C)
-    ]
-    return Expr(:call, :+, terms...)
+# every component's quantities, with its number appended to their names, then the shared ones
+function quantities(c::Composite, background::Bool)
+    parts = ntuple(k -> quantities(c.components[k], k, k), ncomponents(c))
+    return (Iterators.flatten(parts)..., common_quantities(c, background)...)
+end
+function share_quantities(c::Composite)
+    names = ntuple(k -> Symbol(:omega, k + 1), ncomponents(c) - 1)
+    return (:shares => (Shares{names}(), SHARE_PRIOR),)
 end
 
 """

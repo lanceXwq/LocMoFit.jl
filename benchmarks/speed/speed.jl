@@ -23,7 +23,9 @@ function site_speed(case, dtype)
     d = readcsv(joinpath(TUTORIAL, case.name * ".csv"))
     cols = columns(case.D)
     locs, precs = matrix(d, cols[1]), matrix(d, cols[2])
-    kw = (init_params=start(case), freeze=case.freeze, dtype, fov_volume=300.0^case.D)
+    kw = (
+        params=start_params(start(case); fixed=case.freeze), dtype, fov_volume=300.0^case.D
+    )
     p, u = fit_problem(LocMoFit.build_model(case.model), locs, precs; kw...)
     N, M = size(locs, 2), sum(length, p.ranges)
     du = zero(u)
@@ -68,7 +70,7 @@ function throughput(case)
         ),
         sites,
     )
-    kw = (init_params=start(case), freeze=case.freeze, fov_volume=300.0^case.D)
+    kw = (params=start_params(start(case); fixed=case.freeze), fov_volume=300.0^case.D)
     fit(k) = run_locmofit(case.model, data[k]...; kw...).loss
     fit(1)                                   # compile on one thread first
     serial = @elapsed foreach(fit, eachindex(data))

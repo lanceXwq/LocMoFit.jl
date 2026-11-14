@@ -67,12 +67,40 @@ function moved(p)
     return NamedTuple{keys(p)}(Tuple(shift(k, v) for (k, v) in pairs(p)))
 end
 
+"""
+    start_params(θ; fixed=(), priors=(;))
+
+Starting values given in LocMoFit's parameter names, as in the tutorial's parameter files (`theta`, `phi` for an axis, `eta`, `logit_prob`, `omega2`), as the `params` of `run_locmofit`: each quantity's `ParamToFit` with its value (an axis as `(theta, phi)`, κ′ = tanh(`eta`), the signal fraction logistic(`logit_prob`), the shares softmax(0, `omega2`)), held (`Fixed()`) if its name is in `fixed`, and with its prior from `priors` if named there (else its default).
+"""
+function start_params(θ; fixed=(), priors=(;))
+    values = Pair{Symbol,Any}[]
+    for (k, v) in pairs(θ)
+        name = string(k)
+        if startswith(name, "theta")
+            suffix = name[6:end]
+            push!(values, Symbol(:axis, suffix) => (v, θ[Symbol(:phi, suffix)]))
+        elseif startswith(name, "eta")
+            push!(values, Symbol(:kappa, name[4:end]) => tanh(v))
+        elseif k == :logit_prob
+            push!(values, :signal => 1 / (1 + exp(-v)))
+        elseif k == :omega2
+            push!(values, :shares => (1 / (1 + exp(v)), 1 / (1 + exp(-v))))
+        elseif !startswith(name, "phi")
+            push!(values, k => v)
+        end
+    end
+    return NamedTuple(
+        k => ParamToFit(v, k in fixed ? Fixed() : get(priors, k, nothing)) for
+        (k, v) in values
+    )
+end
+
 angle_deg(a, b) = acosd(clamp(dot(a, b) / (norm(a) * norm(b)), -1, 1))   # a cap's axis has a sign
 axis_deg(a, b) = min(angle_deg(a, b), 180 - angle_deg(a, b))             # a ring's axis has none
 mirror(a) = [a[1], a[2], -a[3]]
 
 # the true structure in the world frame, as run_locmofit reports a fitted one: started at the truth (the starting axes at the true ones, the chart coordinates at 0), the starting point is the truth
 function true_components(model, truth, locs, precs)
-    p, u = fit_problem(LocMoFit.build_model(model), locs, precs; init_params=truth)
+    p, u = fit_problem(LocMoFit.build_model(model), locs, precs; params=start_params(truth))
     return LocMoFit.components(p.model, p.unit_model, full_parameters(u, p.parameter_map))
 end

@@ -27,7 +27,14 @@ function local_points(::SphericalCap, unit_cap, shape)
     return shape.s .* ifelse.((1:3) .== 3, -κ .* h, sqrt.(h .* (2 .- κ^2 .* h)) .* unit_cap)
 end
 
-shape_penalty(::SphericalCap, shape) = sq_hinge(1 / shape.s^2 - 1)
+# the scale, with the default prior on sizes, and the curvature κ′ (`kappa`, fitted as `eta`), uniform on (-1, 1) by default
+function shape_quantities(::SphericalCap, suffix)
+    s = Symbol(:s, suffix)
+    return (
+        s => (Size{s}(), SIZE_PRIOR),
+        Symbol(:kappa, suffix) => (Curvature{Symbol(:eta, suffix),s}(), Flat()),
+    )
+end
 
 # the cap's size and shape in the usual terms
 function shape_summary(::SphericalCap, shape)

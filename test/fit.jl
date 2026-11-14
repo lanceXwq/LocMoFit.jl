@@ -1,10 +1,12 @@
 # Fits of the tutorial data (examples/data: one simulated site per model, 15% background, a 300 nm field of view), from the benchmark's moved start: positions +5 nm, sizes ×1.15 (a cap's κ′ ×0.85), starting axes moved by 0.15 rad in θ and ϕ, blur 2 nm, the default signal fraction and shares. Every error must stay within 4× the scatter of one fit, measured over the 20 sites of the accuracy benchmark in the same setting (benchmarks/accuracy/share_prior_2026-11-14.txt, background, moved start, Float64; the simple models' values are those of prior_5_2_2026-10-28.txt, which the share prior does not change); an axis's error within its mean plus 4× its scatter. Under the default prior Beta(5, 2) the signal fraction showed no bias there, so it gets 4× its scatter too. The default share prior moves the ring's share of the cap with a ring by +0.0075 there (from 0.3 toward 1/2, derivations/derivation.qmd, @eq-share-map), so that share must stay within 4× its scatter of that bias.
 
-include(joinpath(@__DIR__, "tutorial.jl"))
+# The helpers are those of tutorial.jl, which runtests.jl includes.
 
 @testset "fit of the ring" begin
     locs, precs, truth, signal = tutorial("ring", 3)
-    r = run_locmofit("Ring", locs, precs; init_params=moved(truth), fov_volume=300.0^3)
+    r = run_locmofit(
+        "Ring", locs, precs; params=start_params(moved(truth)), fov_volume=300.0^3
+    )
     c, t = only(r.components), only(true_components("Ring", truth, locs, precs))
     @test string(r.result.retcode) == "Success"
     @test all(abs.(c.position - t.position) .< 4 .* [1.254, 1.055, 1.351])
@@ -20,8 +22,7 @@ end
         "Ring",
         locs,
         precs;
-        init_params=merge(moved(truth), (z=truth.z,)),
-        freeze=(:z,),
+        params=start_params(merge(moved(truth), (z=truth.z,)); fixed=(:z,)),
         fov_volume=300.0^2,
     )
     c, t = only(r.components), only(true_components("Ring", truth, locs, precs))
@@ -36,7 +37,7 @@ end
 @testset "fit of the double ring" begin
     locs, precs, truth, signal, component = tutorial("double_ring", 3)
     r = run_locmofit(
-        "DoubleRing", locs, precs; init_params=moved(truth), fov_volume=300.0^3
+        "DoubleRing", locs, precs; params=start_params(moved(truth)), fov_volume=300.0^3
     )
     c, t = r.components, true_components("DoubleRing", truth, locs, precs)
     @test string(r.result.retcode) == "Success"
@@ -52,7 +53,7 @@ end
 @testset "fit of the spherical cap" begin
     locs, precs, truth, signal = tutorial("spcap", 3)
     r = run_locmofit(
-        "SphericalCap", locs, precs; init_params=moved(truth), fov_volume=300.0^3
+        "SphericalCap", locs, precs; params=start_params(moved(truth)), fov_volume=300.0^3
     )
     c, t = only(r.components), only(true_components("SphericalCap", truth, locs, precs))
     @test string(r.result.retcode) == "Success"
@@ -65,7 +66,9 @@ end
 
 @testset "fit of the cap with a ring" begin
     locs, precs, truth, signal, component = tutorial("spcap_ring", 3)
-    r = run_locmofit("SpCapRing", locs, precs; init_params=moved(truth), fov_volume=300.0^3)
+    r = run_locmofit(
+        "SpCapRing", locs, precs; params=start_params(moved(truth)), fov_volume=300.0^3
+    )
     c, t = r.components, true_components("SpCapRing", truth, locs, precs)
     center(k) = k.position - k.radius * k.axis                           # the cap's sphere's center
     @test string(r.result.retcode) == "Success"
@@ -81,7 +84,7 @@ end
 end
 
 @testset "fits from the estimated start" begin
-    # with init_params left out, every 3D tutorial fit starts from the data and reaches the optimum the truth-started fit reaches (or a better one): its loss no more than 0.01 per localization above, the threshold NOTES.md counts a miss by, while the wrong maxima found on simulated sites lay 0.04–0.7 above
+    # with no starting values given, every 3D tutorial fit starts from the data and reaches the optimum the truth-started fit reaches (or a better one): its loss no more than 0.01 per localization above, the threshold NOTES.md counts a miss by, while the wrong maxima found on simulated sites lay 0.04–0.7 above
     for (case, model) in (
         ("ring", "Ring"),
         ("spcap", "SphericalCap"),
@@ -90,7 +93,7 @@ end
     )
         locs, precs, truth, _ = tutorial(case, 3)
         a = run_locmofit(model, locs, precs; fov_volume=300.0^3)
-        t = run_locmofit(model, locs, precs; init_params=truth, fov_volume=300.0^3)
+        t = run_locmofit(model, locs, precs; params=start_params(truth), fov_volume=300.0^3)
         @test string(a.result.retcode) == "Success"
         @test a.loss < t.loss + 0.01
     end

@@ -106,8 +106,7 @@ function fit_sites(case, setting)
             case.model,
             locs,
             precs;
-            init_params=init,
-            freeze=case.freeze,
+            params=start_params(init; fixed=case.freeze),
             dtype=setting.dtype,
             fov_volume=300.0^case.D,
         )
