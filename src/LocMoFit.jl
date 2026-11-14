@@ -149,7 +149,7 @@ end
 """
     components(model, unit_model, θ)
 
-Each component in the world frame: the position of its reference point (a ring's center, a cap's apex), its axis as a unit vector and as polar angle `theta` and azimuth `phi`, and its shape in the usual terms (a ring's radius `r`; a cap's scale `s`, dimensionless curvature `kappa` (κ′ = tanh `eta`), `curvature` (κ′/s), sphere `radius` (s/κ′), half-angle `alpha` and `area`).
+Each component in the world frame: the position of its reference point (a ring's center, a cap's apex), its axis as a unit vector and as polar angle `theta` and azimuth `phi`, and its shape in the usual terms (a ring's radius `r`; a cap's scale `s`, dimensionless curvature `kappa` (κ′ = sin(α/2) of the fitted half-angle α), `curvature` (κ′/s), sphere `radius` (s/κ′), half-angle `alpha` (in [0, π], from κ′: acos(1 − 2κ′²)) and `area`).
 """
 function components(m::SimpleModel, unit_model, θ)
     R = chart_rotation(unit_model.chart, θ.vx, θ.vy)
@@ -207,8 +207,8 @@ Fit `model` to one site's localizations by maximizing the posterior of derivatio
 - `locs`, `loc_precisions`: `D×N` positions and per-axis precisions (standard deviations), in nm, with `D ∈ {2, 3}`. A 2D fit uses the first two coordinates of the model.
 - `params`: a `NamedTuple` of [`ParamToFit`](@ref), the starting value and the prior of each quantity it names, both in the quantity's own terms; an unknown name throws. A component k of a composite has its number appended to its quantities' names (`x1`, `r1`, `axis2`, …). The quantities and their default priors:
     - `x`, `y`, `z`: the position of the reference point (a ring's center, a cap's apex), in nm; for component k > 1, in component 1's frame. `Flat()`.
-    - `r` (`Ring`), `s` (`SphericalCap`): the size, in nm (a cap's area is 4πs²). `LogNormal(log(50), 1)`: median 50 nm, 95% between 7 and 355 nm.
-    - `kappa` (`SphericalCap`): the dimensionless curvature κ′ in (−1, 1), from a flat disc at 0 to a whole sphere at ±1. `Flat()`.
+    - `r` (`Ring`), `s` (`SphericalCap`): the size, in nm (a cap's area is 4πs²). `LogNormal(log(50) + 1, 1)`: most probable at 50 nm, median 136 nm, 95% between 19 and 965 nm.
+    - `kappa` (`SphericalCap`): the dimensionless curvature κ′ in [−1, 1], from a flat disc at 0 to a whole sphere at ±1 (a starting value inside (−1, 1)). `Flat()`. It is fitted as the cap's half-angle `alpha`, with κ′ = sin(`alpha`/2).
     - `axis`: the axis, as `(theta, phi)`, its polar angle and azimuth; for component k > 1, in component 1's frame. `Flat()`, uniform on the sphere. It is fitted as the coordinates `vx`, `vy` of a tangent chart centered on its starting value.
     - `sigma`: the blur, in nm, added to every precision in quadrature. `Flat()`.
     - `signal` (with a background): the signal fraction. `Beta(5, 2)`: mode 0.8, as much as 5 localizations, so it keeps the fraction inside (0, 1) and pulls it toward 0.8 only on small sites.
@@ -225,7 +225,7 @@ Fit `model` to one site's localizations by maximizing the posterior of derivatio
 
 Returns a `NamedTuple` with:
 
-- `parameters`: all of the optimizer's parameters, held and tied ones included, as a `NamedTuple` (`logit_prob` for the signal fraction, `omega2`, … for the shares, `eta` for a cap's κ′ = tanh(`eta`), `vx`, `vy` for an axis);
+- `parameters`: all of the optimizer's parameters, held and tied ones included, as a `NamedTuple` (`logit_prob` for the signal fraction, `omega2`, … for the shares, `alpha` for a cap's half-angle, κ′ = sin(`alpha`/2), which may come out negative or beyond π, where the shapes repeat (`components` reports the half-angle in [0, π]), `vx`, `vy` for an axis);
 - `signal_fraction`: logistic(`logit_prob`), or `nothing` without a background;
 - `weights`: the components' shares of the signal localizations (one share, 1, for a simple model);
 - `components`: each component in the world frame: its position, its axis (`axis`, `theta`, `phi`), and its shape (see [`components`](@ref));

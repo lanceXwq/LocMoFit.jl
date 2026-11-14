@@ -51,7 +51,7 @@ const CASES = (
     (
         "SphericalCap",
         SphericalCap(),
-        (x=3.0, y=-2.0, z=5.0, s=35.0, eta=0.6, vx=0.1, vy=-0.05, sigma=2.0),
+        (x=3.0, y=-2.0, z=5.0, s=35.0, alpha=1.1, vx=0.1, vy=-0.05, sigma=2.0),
         ((0.4, 1.1),),
     ),
     (
@@ -88,7 +88,7 @@ const CASES = (
             y2=-3.0,
             z2=85.0,
             s2=25.0,
-            eta2=0.5,
+            alpha2=1.0,
             vx2=0.05,
             vy2=0.08,
             sigma=2.0,
@@ -180,10 +180,10 @@ function reference_loss(locs, precs, Ys, w, σ; f=nothing, V=1.0, logprior=0.0)
     return -(total + logprior) / N
 end
 
-# The default priors as run_locmofit documents them: a log-normal of median 50 nm and logarithmic spread 1 on every ring's radius and cap's scale, Beta(5, 2) on the signal fraction, Dirichlet(5) on a composite's shares, and flat otherwise.
+# The default priors as run_locmofit documents them: a log-normal most probable at 50 nm (median 50e nm), with logarithmic spread 1, on every ring's radius and cap's scale, Beta(5, 2) on the signal fraction, Dirichlet(5) on a composite's shares, and flat otherwise.
 function default_priors(model, background)
     return merge(
-        NamedTuple(k => LogNormal(log(50), 1) for k in names_of(model, (:r, :s))),
+        NamedTuple(k => LogNormal(log(50) + 1, 1) for k in names_of(model, (:r, :s))),
         background ? (signal=Beta(5, 2),) : (;),
         model isa Composite ? (shares=Dirichlet(5),) : (;),
     )
@@ -213,7 +213,7 @@ function every_prior(model)
         end,
     )
 end
-# The log prior of derivations/derivation.qmd (Priors on every parameter) with plain formulas, for the priors `priors` at the parameters θ: each density at its quantity, a size's magnitude, a cap's κ′ = sign(s)·tanh(η), an axis by the independent construction `pose` (for component 2, in component 1's frame), the signal fraction and the shares.
+# The log prior of derivations/derivation.qmd (Priors on every parameter) with plain formulas, for the priors `priors` at the parameters θ: each density at its quantity, a size's magnitude, a cap's κ′ = sign(s)·sin(α/2), an axis by the independent construction `pose` (for component 2, in component 1's frame), the signal fraction and the shares.
 function reference_log_prior(model, θ, starts, priors)
     total = 0.0
     for (name, prior) in pairs(priors)
@@ -228,7 +228,7 @@ function reference_log_prior(model, θ, starts, priors)
                 :, 3
             ]
         elseif startswith(s, "kappa")
-            sign(θ[Symbol(:s, s[6:end])]) * tanh(θ[Symbol(:eta, s[6:end])])
+            sign(θ[Symbol(:s, s[6:end])]) * sin(θ[Symbol(:alpha, s[6:end])] / 2)
         elseif name == :sigma || s[1] in ('r', 's')
             abs(θ[name])
         else
@@ -342,13 +342,13 @@ end
     @test all(x -> abs(dot(x - c, n)) < 1e-9, eachcol(X))
 
     # the constant-area cap: on the sphere of radius s/κ′ through the apex, within the half-angle acos(1 - 2κ′²) of the axis; its points are uniform in depth below the apex, which on a sphere (the area of a zone is 2πR times its height) means uniform in area; bending the other way for κ′ < 0; and flat at κ′ = 0, with radius 2s
-    for η in (0.6, -0.4)
+    for α in (1.1, -0.8)
         (_, _, θ, starts) = CASES[2]
-        θ = merge(θ, (eta=η,))
+        θ = merge(θ, (alpha=α,))
         X = model_points(
             SphericalCap(), unit_model(SphericalCap(), θ, starts; spacing=SPACING), θ
         )
-        κ, apex, n = tanh(θ.eta), [θ.x, θ.y, θ.z], pose(starts[1], θ.vx, θ.vy)[:, 3]
+        κ, apex, n = sin(θ.alpha / 2), [θ.x, θ.y, θ.z], pose(starts[1], θ.vx, θ.vy)[:, 3]
         R = θ.s / κ
         center = apex - R * n
         @test size(X, 2) == ceil(Int, 4π * θ.s^2 / SPACING^2)
@@ -358,7 +358,7 @@ end
         @test all(q -> abs(mean(depth .≤ q) - q) < 2 / size(X, 2), (0.25, 0.5, 0.75))
     end
     (_, _, θ, starts) = CASES[2]
-    θ = merge(θ, (eta=0.0,))
+    θ = merge(θ, (alpha=0.0,))
     X = model_points(
         SphericalCap(), unit_model(SphericalCap(), θ, starts; spacing=SPACING), θ
     )
@@ -385,12 +385,12 @@ end
     n1 = size(U[1].points, 2)
     R1 = pose(starts[1], θ.vx1, θ.vy1)
     c1 = [θ.x1, θ.y1, θ.z1]
-    a2, ρ = R1 * pose(starts[2], θ.vx2, θ.vy2)[:, 3], θ.s2 / tanh(θ.eta2)
+    a2, ρ = R1 * pose(starts[2], θ.vx2, θ.vy2)[:, 3], θ.s2 / sin(θ.alpha2 / 2)
     center = c1 + R1 * [θ.x2, θ.y2, θ.z2] - ρ * a2
     @test all(≈(θ.r1), norm.(eachcol(X[:, 1:n1] .- c1)))
     @test all(≈(ρ), norm.(eachcol(X[:, (n1 + 1):end] .- center)))
     @test all(
-        x -> 1 - 2tanh(θ.eta2)^2 - 1e-9 ≤ dot(x - center, a2) / ρ ≤ 1 + 1e-9,
+        x -> 1 - 2sin(θ.alpha2 / 2)^2 - 1e-9 ≤ dot(x - center, a2) / ρ ≤ 1 + 1e-9,
         eachcol(X[:, (n1 + 1):end]),
     )
 end
@@ -493,7 +493,7 @@ end
             starts,
             locs ./ L,
             precs ./ L;
-            priors=NamedTuple(k => LogNormal(log(50 / L), 1) for k in sizes),
+            priors=NamedTuple(k => LogNormal(log(50 / L) + 1, 1) for k in sizes),
             spacing=SPACING / L,
             fov=FOV / L,
         )
@@ -523,7 +523,7 @@ end
     )
     start = merge(
         ring,
-        (x2=0.0, y2=0.0, z2=85.0, s2=30.0, eta2=atanh(0.5), theta2=0.2, phi2=-0.7),
+        (x2=0.0, y2=0.0, z2=85.0, s2=30.0, alpha2=π / 3, theta2=0.2, phi2=-0.7),
         (sigma=2.0, logit_prob=1.2),
     )
     free = (:z2, :s2, :kappa2, :axis2)
@@ -546,7 +546,7 @@ end
     θf = fit.parameters
     @test θf.z2 ≈ 70 rtol = 1e-8
     @test abs(θf.s2) ≈ 40exp(-0.5^2) rtol = 1e-8
-    @test sign(θf.s2) * tanh(θf.eta2) ≈ 0.3 rtol = 1e-8
+    @test sign(θf.s2) * sin(θf.alpha2 / 2) ≈ 0.3 rtol = 1e-8
     @test abs(dot(pose((0.2, -0.7), θf.vx2, θf.vy2)[:, 3], direction(0.5, 1.0))) ≈ 1 rtol =
         1e-10
 
@@ -607,7 +607,7 @@ end
         :y1,
         :z1,
         :s1,
-        :eta1,
+        :alpha1,
         :vx1,
         :vy1,
         :x2,
@@ -631,7 +631,7 @@ end
     U = unit_model(c, θ, starts; spacing=SPACING)
     X = model_points(c, U, θ)
     cap_alone = model_points(
-        SphericalCap(), U[1], (x=0.0, y=0.0, z=0.0, s=θ.s1, eta=θ.eta1, vx=0.0, vy=0.0)
+        SphericalCap(), U[1], (x=0.0, y=0.0, z=0.0, s=θ.s1, alpha=θ.alpha1, vx=0.0, vy=0.0)
     )
     ring_alone = model_points(Ring(), U[2], (x=5.0, y=0.0, z=30.0, r=θ.r2, vx=0.3, vy=-0.1))
     @test X ≈ hcat(cap_alone, ring_alone)
@@ -640,8 +640,8 @@ end
     @test comps[2].position ≈ [5.0, 0.0, 30.0] &&
         comps[2].axis ≈ pose(starts[2], 0.3, -0.1)[:, 3] &&
         comps[2].r == 50.0
-    @test comps[1].kappa ≈ tanh(θ.eta1) &&
-        comps[1].radius ≈ θ.s1 / tanh(θ.eta1) &&
+    @test comps[1].kappa ≈ sin(θ.alpha1 / 2) &&
+        comps[1].radius ≈ θ.s1 / sin(θ.alpha1 / 2) &&
         comps[1].area ≈ 4π * θ.s1^2
 end
 
@@ -819,13 +819,13 @@ end
     # a cap, each point with its mirror image through the axis: the axis is exact and the apex lies on it; flat, the apex is the center and s² is the true s² less half the summed precision variance (here 3·1²), since the mean squared distance from the apex is 2s²
     U = LocMoFit.unit_cap(Float64, 400)
     U = hcat(U, [-U[1:2, :]; U[3:3, :]])
-    for eta in (0.0, 0.5)
-        cap = R * LocMoFit.local_points(SphericalCap(), U, (s=30.0, eta=eta)) .+ c
+    for α in (0.0, 1.0)
+        cap = R * LocMoFit.local_points(SphericalCap(), U, (s=30.0, alpha=α)) .+ c
         e = estimate_start(SphericalCap(), cap, fill(1.0, size(cap)), nothing)
         @test angle_of(e) ≈ n                       # κ′ ≥ 0, as the true cap's
         @test norm(cross([e.x, e.y, e.z] - c, n)) < 1e-9
-        eta == 0 &&
-            @test [e.x, e.y, e.z] ≈ c && e.s ≈ sqrt(30^2 - 3 / 2) && abs(e.eta) < 1e-9
+        α == 0 &&
+            @test [e.x, e.y, e.z] ≈ c && e.s ≈ sqrt(30^2 - 3 / 2) && abs(e.alpha) < 1e-9
     end
 
     # the two scores against loops over the derivation's formulas, on scattered localizations

@@ -3,7 +3,7 @@
 const START_COARSE = 100            # candidate axes spread over the hemisphere
 const START_FINE = 64               # candidate axes around the best coarse one,
 const START_CONE = deg2rad(25)      # within this angle of it
-const START_MAX_KAPPA = 0.95        # |κ′| of a starting cap, which keeps η = atanh κ′ finite
+const START_MAX_KAPPA = 0.95        # |κ′| of a starting cap, which keeps it off the whole sphere (α = ±π), where the fit's slope in α vanishes
 
 """
     estimate_start(model, locs, loc_precisions, axis) -> NamedTuple
@@ -151,9 +151,9 @@ function simple_start(::SphericalCap, f, n, free_axis)
     # an estimated axis is turned so that the cap bends toward −n (κ′ ≥ 0); turned around, a cap is the same with −κ′
     free_axis && b > 0 && ((n, a, b) = (-n, -a, -b))
     apex = f.center + a * n
-    s, η = cap_shape(f.rel .- a * n, f.var, f.c, b)
+    s, α = cap_shape(f.rel .- a * n, f.var, f.c, b)
     θ, ϕ = axis_angles(n)
-    return (x=apex[1], y=apex[2], z=apex[3], s=s, eta=η, theta=θ, phi=ϕ)
+    return (x=apex[1], y=apex[2], z=apex[3], s=s, alpha=α, theta=θ, phi=ϕ)
 end
 
 # the least-squares fit w ≈ a + b·x, as (a, b)
@@ -168,7 +168,7 @@ end
 function cap_shape(d, var, c, b)
     m = sum(i -> c[i] * (sum(abs2, view(d, :, i)) - sum(view(var, :, i))), eachindex(c))
     s = sqrt(max(m / (2 * sum(c)), 1))
-    return s, atanh(clamp(-2b * s, -START_MAX_KAPPA, START_MAX_KAPPA))
+    return s, 2asin(clamp(-2b * s, -START_MAX_KAPPA, START_MAX_KAPPA))
 end
 
 # the reference point (a ring's center, a cap's apex) and the shape of a component from its group G, along the axis n
@@ -177,8 +177,8 @@ function part_start(::Ring, f, s, G, n)
 end
 function part_start(::SphericalCap, f, s, G, n)
     a, b = parabola(s.w[G], s.ρ2[G])
-    sc, η = cap_shape(f.rel[:, G] .- a * n, f.var[:, G], f.c[G], b)
-    return f.center + a * n, (s=sc, eta=η)
+    sc, α = cap_shape(f.rel[:, G] .- a * n, f.var[:, G], f.c[G], b)
+    return f.center + a * n, (s=sc, alpha=α)
 end
 
 """

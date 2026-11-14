@@ -70,7 +70,7 @@ end
 """
     start_params(θ; fixed=(), priors=(;))
 
-Starting values given in LocMoFit's parameter names, as in the tutorial's parameter files (`theta`, `phi` for an axis, `eta`, `logit_prob`, `omega2`), as the `params` of `run_locmofit`: each quantity's `ParamToFit` with its value (an axis as `(theta, phi)`, κ′ = tanh(`eta`), the signal fraction logistic(`logit_prob`), the shares softmax(0, `omega2`)), held (`Fixed()`) if its name is in `fixed`, and with its prior from `priors` if named there (else its default).
+Starting values given in LocMoFit's parameter names (`theta`, `phi` for an axis, `alpha` for a cap's half-angle, `logit_prob`, `omega2`), or in those of the tutorial's parameter files, which name a cap's curvature `eta` (κ′ = tanh(`eta`), an earlier parametrization), as the `params` of `run_locmofit`: each quantity's `ParamToFit` with its value (an axis as `(theta, phi)`, κ′ = sin(`alpha`/2) or tanh(`eta`), the signal fraction logistic(`logit_prob`), the shares softmax(0, `omega2`)), held (`Fixed()`) if its name is in `fixed`, and with its prior from `priors` if named there (else its default).
 """
 function start_params(θ; fixed=(), priors=(;))
     values = Pair{Symbol,Any}[]
@@ -79,6 +79,8 @@ function start_params(θ; fixed=(), priors=(;))
         if startswith(name, "theta")
             suffix = name[6:end]
             push!(values, Symbol(:axis, suffix) => (v, θ[Symbol(:phi, suffix)]))
+        elseif startswith(name, "alpha")
+            push!(values, Symbol(:kappa, name[6:end]) => sin(v / 2))
         elseif startswith(name, "eta")
             push!(values, Symbol(:kappa, name[4:end]) => tanh(v))
         elseif k == :logit_prob

@@ -10,14 +10,14 @@ abstract type Prior end
 """
     Flat()
 
-A constant density: no prior term. It is proper on a bounded quantity (a cap's `kappa` in (−1, 1), an axis on the sphere, the signal fraction, the shares) and improper on a position or a size, which the localizations must then determine.
+A constant density: no prior term. It is proper on a bounded quantity (a cap's `kappa` in [−1, 1], an axis on the sphere, the signal fraction, the shares) and improper on a position or a size, which the localizations must then determine.
 """
 struct Flat <: Prior end
 
 """
     Normal(mean, sd)
 
-The normal density of a position (nm), a size (nm; of its magnitude, so that `Normal(0, sd)` on `sigma` is a half-normal) or a cap's `kappa` (restricted to (−1, 1)).
+The normal density of a position (nm), a size (nm; of its magnitude, so that `Normal(0, sd)` on `sigma` is a half-normal) or a cap's `kappa` (restricted to [−1, 1]).
 """
 struct Normal{T<:Real} <: Prior
     mean::T
@@ -32,7 +32,7 @@ end
 """
     LogNormal(mu, sigma)
 
-The log-normal density of a size (nm): its logarithm is normal with mean `mu` and standard deviation `sigma`, so its median is exp(`mu`) and it spreads by a factor exp(`sigma`) (derivations/derivation.qmd, @eq-lognormal). It vanishes at 0, so a size with this prior cannot shrink to a point. The default of a ring's `r` and a cap's `s` is `LogNormal(log(50), 1)`: median 50 nm, 95% of it between 7 and 355 nm.
+The log-normal density of a size (nm): its logarithm is normal with mean `mu` and standard deviation `sigma`, so its median is exp(`mu`) and it spreads by a factor exp(`sigma`) (derivations/derivation.qmd, @eq-lognormal). It vanishes at 0, so a size with this prior cannot shrink to a point. Its most probable value, which a fit's maximum favors, is exp(`mu` − `sigma`²). The default of a ring's `r` and a cap's `s` is `LogNormal(log(50) + 1, 1)`: most probable at 50 nm, median 136 nm, 95% of it between 19 and 965 nm.
 """
 struct LogNormal{T<:Real} <: Prior
     mu::T
@@ -134,7 +134,7 @@ abstract type Quantity end
 struct Location{n} <: Quantity end
 # a size (nm), the magnitude of the parameter n, which the likelihood is even in
 struct Size{n} <: Quantity end
-# a cap's curvature κ′ = sign(s)·tanh(η), with η the parameter n and s the parameter s: the cap of scale -s is the cap of scale s with the opposite curvature
+# a cap's curvature κ′ = sign(s)·sin(α/2), with the half-angle α the parameter n and s the parameter s: the cap of scale -s is the cap of scale s with the opposite curvature
 struct Curvature{n,s} <: Quantity end
 # the axis of component k, from its chart coordinates vx, vy: as m = normalize((vx, vy, 1)), the axis in the chart's frame
 struct Axis{k,vx,vy} <: Quantity end
@@ -151,7 +151,7 @@ end
 
 quantity(::Location{n}, θ) where {n} = getfield(θ, n)
 quantity(::Size{n}, θ) where {n} = abs(getfield(θ, n))
-quantity(::Curvature{n,s}, θ) where {n,s} = sign(getfield(θ, s)) * tanh(getfield(θ, n))
+quantity(::Curvature{n,s}, θ) where {n,s} = sign(getfield(θ, s)) * sin(getfield(θ, n) / 2)
 function quantity(::Axis{k,vx,vy}, θ) where {k,vx,vy}
     a, b = getfield(θ, vx), getfield(θ, vy)
     r = inv(sqrt(1 + a^2 + b^2))
@@ -230,7 +230,7 @@ parameter_names(::Shares{names}) where {names} = names
 start_values(q::Union{Location,Size}, v::Real, axes) = (only(parameter_names(q)) => v,)
 function start_values(q::Curvature, v::Real, axes)
     abs(v) < 1 || throw(ArgumentError("kappa must lie in (-1, 1), got $v"))
-    return (only(parameter_names(q)) => atanh(v),)
+    return (only(parameter_names(q)) => 2asin(v),)
 end
 function start_values(::Axis{k}, v, axes) where {k}
     length(v) == 2 ||
@@ -253,7 +253,7 @@ function start_values(q::Quantity, v, axes)
     return throw(ArgumentError("a $(describe(q)) is not given as $(repr(v))"))
 end
 
-const SIZE_PRIOR = LogNormal(log(50.0), 1.0)
+const SIZE_PRIOR = LogNormal(log(50.0) + 1, 1.0)
 const SIGNAL_PRIOR = Beta(5.0, 2.0)
 const SHARE_PRIOR = Dirichlet(5.0)
 
