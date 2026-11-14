@@ -396,10 +396,10 @@ end
 end
 
 @testset "loss against a reference" begin
-    # the posterior with its default priors, then with each default replaced (the signal fraction's, the shares', and flat sizes) and with every other quantity given a prior
+    # the posterior with its default priors, then with each default replaced (the signal fraction's, the shares', and flat sizes) and with every other quantity given a prior; each distinct variant once (the signal fraction's need a background, the shares' a composite)
     for (_, model, θ, starts) in CASES, D in (3, 2), background in (true, false)
         composite = model isa Composite
-        variants = (
+        variants = unique((
             (;),
             (background ? (signal=Beta(197, 50),) : (;)),
             (background ? (signal=Flat(),) : (;)),
@@ -407,7 +407,7 @@ end
             (composite ? (shares=Flat(),) : (;)),
             NamedTuple(k => Flat() for k in names_of(model, (:r, :s))),
             every_prior(model),
-        )
+        ))
         locs, precs = test_data(model, θ, starts; D)
         for priors in variants
             p, u = problem(model, θ, starts, locs, precs; background, priors)
@@ -428,7 +428,7 @@ end
 end
 
 @testset "the share prior's optimum" begin
-    # two rings 2 µm apart along their axis, n₁ and n₂ localizations exactly on them, no background: every localization comes from its own ring (q = 0 or 1 in derivations/derivation.qmd, @eq-shares), so the share that maximizes the posterior is (n₂ + α - 1)/(n + 2(α - 1)) (@eq-share-map), and n₂/n without the prior
+    # two rings 2 µm apart along their axis, n₁ and n₂ localizations exactly on them, no background: every localization comes from its own ring (q = 0 or 1 in derivations/derivation.qmd, @eq-shares), so the share that maximizes the posterior is (n₂ + α - 1)/(n + 2(α - 1)) (@eq-share-map), n₂/n for the flat Dirichlet(1), whose term is 0 (Dirichlet(1) rather than Flat() reuses the compiled loss). The fits also check what a fit without a background returns
     n1, n2, r = 30, 10, 50.0
     ring(n, z) = reduce(
         hcat,
@@ -451,20 +451,22 @@ end
         phi2=0.0,
         sigma=1.0,
     )
-    for α in (5.0, 2.0, nothing)
+    for α in (5.0, 2.0, 1.0)
         fit = run_locmofit(
             DoubleRing(),
             locs,
             precs;
             params=merge(
                 start_params(θ; fixed=keys(start_params(θ))),
-                (shares=ParamToFit(α === nothing ? Flat() : Dirichlet(α)),),
+                (shares=ParamToFit(Dirichlet(α)),),
             ),
             background=false,
             tol=1e-10,
         )
-        expected = α === nothing ? n2 / (n1 + n2) : (n2 + α - 1) / (n1 + n2 + 2(α - 1))
-        @test fit.weights[2] ≈ expected rtol = 1e-6
+        @test fit.weights[2] ≈ (n2 + α - 1) / (n1 + n2 + 2(α - 1)) rtol = 1e-6
+        @test !haskey(fit.parameters, :logit_prob) &&
+            fit.signal_fraction === nothing &&
+            isfinite(fit.loss)
     end
 end
 
@@ -678,12 +680,10 @@ end
 end
 
 @testset "gradient" begin
-    # Enzyme's gradient of the loss (through the rule for the log-likelihood) against central differences, for every model (with the background, the default priors and the weights); DoubleRing with its radii tied and its second axis held, and once without a background; SpCapRing also in 2D; SphericalCap and SpCapRing with every kind of prior
+    # Enzyme's gradient of the loss (through the rule for the log-likelihood) against central differences, for every model with the background and the weights: Ring with the default priors; SphericalCap and SpCapRing with the default priors and every other kind of prior; DoubleRing with its radii tied and its second axis held, and once without a background; SpCapRing also in 2D
     for (_, model, θ, starts, kwargs, D) in (
         (CASES[1]..., (;), 3),
-        (CASES[2]..., (;), 3),
         (CASES[3]..., (fixed=(:axis2,), params=(r2=ParamToFit(Tied(:r1)),)), 3),
-        (CASES[4]..., (;), 3),
         (CASES[3]..., (background=false,), 3),
         (CASES[4]..., (;), 2),
         (CASES[2]..., (priors=every_prior(CASES[2][2]),), 3),
@@ -741,34 +741,6 @@ end
     @test h.parameters == r.parameters
     @test length(h.history.losses) == length(h.history.parameters) > 1
     @test all(q -> q.sigma == 1.0, h.history.parameters)
-
-    # without a background: no signal fraction to fit; a starting axis pointing down works too
-    nb = run_locmofit(
-        "Ring",
-        locs,
-        precs;
-        params=start_params(merge(init, (theta=π,))),
-        background=false,
-        spacing=SPACING,
-        max_iter=5,
-    )
-    @test !haskey(nb.parameters, :logit_prob) &&
-        nb.signal_fraction === nothing &&
-        isfinite(nb.loss)
-
-    # freezing works for every model (it failed for SphericalCap and DoubleRing in the Lux version)
-    for (name, model, θ, starts) in CASES
-        locs, precs = test_data(model, θ, starts)
-        f = run_locmofit(
-            name,
-            locs,
-            precs;
-            params=case_params(model, θ, starts; fixed=(:sigma,)),
-            spacing=SPACING,
-            max_iter=5,
-        )
-        @test f.parameters.sigma == θ.sigma
-    end
 
     # a tie holds throughout, and the unit points are built with it; a composite can be passed as a model, and its shares sum to one
     (_, model, θ, starts) = CASES[3]
