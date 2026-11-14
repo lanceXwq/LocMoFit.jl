@@ -84,7 +84,7 @@ end
 end
 
 @testset "fits from the estimated start" begin
-    # with no starting values given, every 3D tutorial fit starts from the data and reaches the optimum the truth-started fit reaches (or a better one): its loss no more than 0.01 per localization above, the threshold NOTES.md counts a miss by, while the wrong maxima found on simulated sites lay 0.04–0.7 above
+    # with no starting values given, every 3D tutorial fit starts from the data and reaches the optimum the moved-start fit reaches (or a better one), the fit that the testsets above check against the truth: its loss no more than 0.01 per localization above, the threshold NOTES.md counts a miss by, while the wrong maxima found on simulated sites lay 0.04–0.7 above
     for (case, model) in (
         ("ring", "Ring"),
         ("spcap", "SphericalCap"),
@@ -93,8 +93,10 @@ end
     )
         locs, precs, truth, _ = tutorial(case, 3)
         a = run_locmofit(model, locs, precs; fov_volume=300.0^3)
-        t = run_locmofit(model, locs, precs; params=start_params(truth), fov_volume=300.0^3)
+        m = run_locmofit(
+            model, locs, precs; params=start_params(moved(truth)), fov_volume=300.0^3
+        )
         @test string(a.result.retcode) == "Success"
-        @test a.loss < t.loss + 0.01
+        @test a.loss < m.loss + 0.01
     end
 end

@@ -396,18 +396,22 @@ end
 end
 
 @testset "loss against a reference" begin
-    # the posterior with its default priors, then with each default replaced (the signal fraction's, the shares', and flat sizes) and with every other quantity given a prior; each distinct variant once (the signal fraction's need a background, the shares' a composite)
+    # the posterior with its default priors, then with each default replaced (the signal fraction's, the shares', and flat sizes) and with every other quantity given a prior; each distinct variant once (the signal fraction's need a background, the shares' a composite); the log prior does not depend on D, so in 2D only the defaults
     for (_, model, θ, starts) in CASES, D in (3, 2), background in (true, false)
         composite = model isa Composite
-        variants = unique((
-            (;),
-            (background ? (signal=Beta(197, 50),) : (;)),
-            (background ? (signal=Flat(),) : (;)),
-            (composite ? (shares=Dirichlet(2.5),) : (;)),
-            (composite ? (shares=Flat(),) : (;)),
-            NamedTuple(k => Flat() for k in names_of(model, (:r, :s))),
-            every_prior(model),
-        ))
+        variants = if D == 2
+            ((;),)
+        else
+            unique((
+                (;),
+                (background ? (signal=Beta(197, 50),) : (;)),
+                (background ? (signal=Flat(),) : (;)),
+                (composite ? (shares=Dirichlet(2.5),) : (;)),
+                (composite ? (shares=Flat(),) : (;)),
+                NamedTuple(k => Flat() for k in names_of(model, (:r, :s))),
+                every_prior(model),
+            ))
+        end
         locs, precs = test_data(model, θ, starts; D)
         for priors in variants
             p, u = problem(model, θ, starts, locs, precs; background, priors)
