@@ -198,7 +198,7 @@ function names_of(c::Composite, of)
         ),
     )
 end
-# Every kind of prior that is flat by default, on the case's model: a normal density on the height (z, or z2 in component 1's frame), on κ′ and, centered at 0, on the blur; a log-normal on the sizes, and a Watson density on every axis (a girdle for the second).
+# Every kind of prior that is flat by default, on the case's model: a normal density on the height (z, or z2 in component 1's frame), on κ′ and, centered at 0, on the blur; a log-normal on the sizes, and on every axis a Watson density or, on a composite's first axis, a Bingham density (on the second, a girdle).
 function every_prior(model)
     composite = model isa Composite
     return merge(
@@ -207,7 +207,10 @@ function every_prior(model)
         NamedTuple(k => Normal(0.3, 0.2) for k in names_of(model, (:kappa,))),
         (sigma=Normal(0, 10),),
         if composite
-            (axis1=Watson(0.5, 1.0, 3.0), axis2=Watson(0.1, -0.3, -2.0))
+            (
+                axis1=Bingham(Watson(0.5, 1.0, 3.0), Watson(0.5 + π / 2, 1.0, -2.0)),
+                axis2=Watson(0.1, -0.3, -2.0),
+            )
         else
             (axis=Watson(0.5, 1.0, 3.0),)
         end,
@@ -240,6 +243,8 @@ function reference_log_prior(model, θ, starts, priors)
             -log(q) - (log(q) - prior.mu)^2 / (2prior.sigma^2)
         elseif prior isa Watson
             prior.kappa * dot(direction(prior.theta, prior.phi), q)^2
+        elseif prior isa Bingham
+            sum(t.kappa * dot(direction(t.theta, t.phi), q)^2 for t in prior.terms)
         elseif prior isa Beta
             (prior.a - 1) * log(q) + (prior.b - 1) * log(1 - q)
         elseif prior isa Dirichlet
@@ -503,7 +508,7 @@ end
 end
 
 @testset "priors" begin
-    # where the likelihood does not depend on a quantity, the fit ends at its prior's mode (derivations/derivation.qmd, Priors on every parameter): the height of a ring in 2D under a normal density; and the cap of a SpCapRing whose share is held at 10⁻²⁰, fitted to a ring's localizations with a background, so that the cap's density is negligible next to the background's: its height z2 at the normal's mean, its scale at the log-normal's mode exp(μ - σ²), its κ′ at the normal's mean, and its axis along ±μ of the Watson density
+    # where the likelihood does not depend on a quantity, the fit ends at its prior's mode (derivations/derivation.qmd, Priors on every parameter): the height of a ring in 2D under a normal density; and the cap of a SpCapRing whose share is held at 10⁻²⁰, fitted to a ring's localizations with a background, so that the cap's density is negligible next to the background's: its height z2 at the normal's mean, its scale at the log-normal's mode exp(μ - σ²), its κ′ at the normal's mean, and its axis along ±d under a Bingham density that holds it near the plane perpendicular to ν = (θ, ϕ) = (0.5 + π/2, 1) (κ = −5) and pulls it toward d = (0.5, 1), which is perpendicular to ν, within that plane (κ = 2): d is the eigenvector of A with the largest eigenvalue, 2, against 0 and −5
     (_, model, θ, starts) = CASES[1]
     locs, precs = test_data(model, θ, starts; D=2)
     held = Tuple(k for k in keys(case_params(model, θ, starts)) if k != :z)
@@ -537,7 +542,7 @@ end
         z2=Normal(70, 5),
         s2=LogNormal(log(40), 0.5),
         kappa2=Normal(0.3, 0.2),
-        axis2=Watson(0.5, 1.0, 3.0),
+        axis2=Bingham(Watson(0.5 + π / 2, 1.0, -5.0), Watson(0.5, 1.0, 2.0)),
     )
     params = merge(
         params, NamedTuple(k => ParamToFit(params[k].value, priors[k]) for k in free)
@@ -562,6 +567,9 @@ end
     @test_throws ArgumentError fit_problem(
         Ring(), locs, precs; params=(r=ParamToFit(Watson(0, 0, 1)),)
     )    # a Watson density fits axes only
+    @test_throws ArgumentError fit_problem(
+        Ring(), locs, precs; params=(r=ParamToFit(Bingham(Watson(0, 0, 1))),)
+    )    # and so does a Bingham density
     @test_throws ArgumentError fit_problem(
         Ring(), locs, precs; params=(axis=ParamToFit(Normal(0, 1)),)
     )
@@ -596,6 +604,7 @@ end
     @test_throws ArgumentError LogNormal(0, -1)
     @test_throws ArgumentError Beta(0.5, 2)
     @test_throws ArgumentError Dirichlet(0.5)
+    @test_throws ArgumentError Bingham()
 end
 
 @testset "composites" begin

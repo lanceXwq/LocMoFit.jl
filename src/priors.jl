@@ -96,6 +96,20 @@ struct Watson{T<:Real} <: Prior
 end
 
 """
+    Bingham(terms::Watson...)
+
+The Bingham density of an axis on the sphere, ∝ exp(Σⱼ kappaⱼ (μⱼ·n)²): the product of the Watson densities `terms`, whose exponents it adds (derivations/derivation.qmd, @eq-bingham). With perpendicular μ's it holds the axis to a different spread in each direction: `Bingham(Watson(0, 0, -1000), Watson(π/2, -π/2, 2.6))` keeps an axis near the xy plane (its tilt out of it with SD ≈ 1/√(2·1000) rad ≈ 1.3°) and near ±y within it (its turn with SD ≈ 1/√(2·2.6) rad ≈ 25°). It gives n and −n the same density and is proper for every kappa. For component k > 1 of a composite, the μ's are in component 1's frame, as the axis is.
+"""
+struct Bingham{W<:Tuple{Vararg{Watson}}} <: Prior
+    terms::W
+    function Bingham(terms::Watson...)
+        isempty(terms) &&
+            throw(ArgumentError("a Bingham density needs at least one Watson term"))
+        return new{typeof(terms)}(terms)
+    end
+end
+
+"""
     Fixed()
 
 A point mass at the quantity's starting value: the quantity is not fitted. Without a value it is held at its default.
@@ -165,10 +179,9 @@ function quantity(::Shares{names}, θ) where {names}
     return lw .- logsumexp(lw)
 end
 
-# The Watson density in the chart's coordinates: μ·n = (R₀ᵀμ)·m for the axis n = R₀m, so it needs only m and R₀ᵀμ, which is fixed for the whole fit (derivations/derivation.qmd, Axes)
-struct ChartWatson{T} <: Prior
-    mu::NTuple{3,T}
-    kappa::T
+# A Watson or Bingham density in the chart's coordinates, the quadratic form mᵀA′m with A′ = R₀ᵀAR₀ for the axis n = R₀m and A = Σⱼ κⱼμⱼμⱼᵀ, fixed for the whole fit (derivations/derivation.qmd, Axes): its six distinct entries a₁₁, a₂₂, a₃₃, a₁₂, a₁₃, a₂₃
+struct ChartQuadratic{T} <: Prior
+    a::NTuple{6,T}
 end
 
 # the log densities, up to a constant
@@ -179,8 +192,12 @@ function log_density(p::LogNormal, q)
 end
 log_density(p::Beta, f::LogFraction) = (p.a - 1) * f.log + (p.b - 1) * f.log1m
 log_density(p::Dirichlet, logw::Tuple) = (p.alpha - 1) * sum(logw)
-function log_density(p::ChartWatson, m)
-    return p.kappa * (p.mu[1] * m[1] + p.mu[2] * m[2] + p.mu[3] * m[3])^2
+function log_density(p::ChartQuadratic, m)
+    a = p.a
+    return a[1] * m[1]^2 +
+           a[2] * m[2]^2 +
+           a[3] * m[3]^2 +
+           2 * (a[4] * m[1] * m[2] + a[5] * m[1] * m[3] + a[6] * m[2] * m[3])
 end
 
 """
@@ -206,7 +223,7 @@ log_prior(t::PriorTerm, θ) = log_density(t.prior, quantity(t.quantity, θ))
 supports(::Quantity, ::Union{Flat,Fixed}) = true
 supports(::Union{Location,Size,Curvature}, ::Union{Normal,Tied}) = true
 supports(::Size, ::LogNormal) = true
-supports(::Axis, ::Watson) = true
+supports(::Axis, ::Union{Watson,Bingham}) = true
 supports(::SignalFraction, ::Beta) = true
 supports(::Shares, ::Dirichlet) = true
 supports(::Quantity, ::Prior) = false
@@ -338,7 +355,7 @@ end
 """
     prior_terms(priors, unit_model, T)
 
-The priors of [`specification`](@ref) as the tuple of [`PriorTerm`](@ref)s the loss evaluates, in the floating-point type `T`. A Watson prior on an axis becomes a density in the chart's coordinates, which needs the chart's frame from the unit model.
+The priors of [`specification`](@ref) as the tuple of [`PriorTerm`](@ref)s the loss evaluates, in the floating-point type `T`. A Watson or Bingham prior on an axis becomes a quadratic form in the chart's coordinates, which needs the chart's frame from the unit model.
 """
 function prior_terms(priors, unit, T)
     return Tuple(prior_term(q, p, unit, T) for (q, p) in priors)
@@ -347,8 +364,15 @@ prior_term(q, p::Normal, unit, T) = PriorTerm(q, Normal(T(p.mean), T(p.sd)))
 prior_term(q, p::LogNormal, unit, T) = PriorTerm(q, LogNormal(T(p.mu), T(p.sigma)))
 prior_term(q, p::Beta, unit, T) = PriorTerm(q, Beta(T(p.a), T(p.b)))
 prior_term(q, p::Dirichlet, unit, T) = PriorTerm(q, Dirichlet(T(p.alpha)))
-function prior_term(q::Axis{k}, p::Watson, unit, T) where {k}
+prior_term(q::Axis, p::Watson, unit, T) = prior_term(q, Bingham(p), unit, T)
+function prior_term(q::Axis{k}, p::Bingham, unit, T) where {k}
     R₀ = unit isa Tuple ? unit[k].chart : unit.chart
-    μ = R₀' * axis_vector(p.theta, p.phi)
-    return PriorTerm(q, ChartWatson(Tuple(T.(μ)), T(p.kappa)))
+    A = sum(
+        t.kappa *
+        (R₀' * axis_vector(t.theta, t.phi)) *
+        (R₀' * axis_vector(t.theta, t.phi))' for t in p.terms
+    )
+    return PriorTerm(
+        q, ChartQuadratic(T.((A[1, 1], A[2, 2], A[3, 3], A[1, 2], A[1, 3], A[2, 3])))
+    )
 end
