@@ -10,11 +10,16 @@ fit = run_locmofit(
     "DoubleRing",
     locs,
     loc_precs;
-    init_params=(
-        x1=5, y1=5, z1=-20, r1=57.5, theta1=0.35, phi1=0.65, z2=55, theta2=0, phi2=0
+    params=(
+        x1=ParamToFit(5),
+        y1=ParamToFit(5),
+        z1=ParamToFit(-20),
+        r1=ParamToFit(57.5),
+        axis1=ParamToFit((0.35, 0.65)),
+        z2=ParamToFit(55),
+        r2=ParamToFit(Tied(:r1)),
+        axis2=ParamToFit((0, 0), Fixed()),
     ),
-    tie=(:r2 => :r1,),
-    freeze=(:vx2, :vy2),
     fov_volume=300.0^3,
     history=true,
 )

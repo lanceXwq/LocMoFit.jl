@@ -25,26 +25,39 @@ end
 
 axis_of(p, k) = LocMoFit.axis_vector(p[Symbol(:theta, k)], p[Symbol(:phi, k)])
 
-# `k`: the suffix of the first component's parameters ("" for a simple model, 1 for a composite)
-function run(label, name, model; freeze=(), k="")
+# the model's default starting values in the names start_params takes: every axis along z (theta = phi = 0 rather than the chart coordinates vx, vy), and the default fractions, a background fraction of 0.1 and equal shares (ω₀ = log(f₀/f₁) with f₁ = 0.9/K for K components)
+function default_start(m)
+    d = LocMoFit.default_parameters(m, Float64)
+    shape = NamedTuple(k => v for (k, v) in pairs(d) if !startswith(string(k), "v"))
+    axes = LocMoFit.orientation_names(m)
+    K = length(axes)
+    return merge(
+        shape, NamedTuple(n => 0.0 for n in Iterators.flatten(axes)), (omega0=log(K / 9),)
+    )
+end
+
+# `k`: the suffix of the first component's parameters ("" for a simple model, 1 for a composite); `fixed`: the quantities held at their starting values
+function run(label, name, model; fixed=(), k="")
     isempty(ONLY) || any(o -> startswith(label, o), ONLY) || return nothing
     S = sites(name)
     m = LocMoFit.build_model(model)
-    defaults = LocMoFit.default_parameters(m, Float64)
+    defaults = start_params(default_start(m); fixed)
+    held = NamedTuple(q => ParamToFit(Fixed()) for q in fixed)
     missed_estimate, missed_defaults, axis_error = 0, 0, Float64[]
     t_estimate, t_fits_estimate, t_fits_defaults = 0.0, 0.0, 0.0
-    run_locmofit(model, S[1][1], S[1][2]; fov_volume=FOV, freeze)   # compile
+    run_locmofit(model, S[1][1], S[1][2]; params=held, fov_volume=FOV)   # compile
     for (locs, precs, truth) in S
         t_estimate += @elapsed est = LocMoFit.estimate_start(m, locs, precs, nothing)
         c = abs(dot(axis_of(est, k), axis_of(truth, k)))
         push!(axis_error, acosd(min(c, 1)))
+        truth_params = start_params(truth; fixed)
         reference =
-            run_locmofit(model, locs, precs; init_params=truth, fov_volume=FOV, freeze).loss
+            run_locmofit(model, locs, precs; params=truth_params, fov_volume=FOV).loss
         t_fits_estimate += @elapsed a = run_locmofit(
-            model, locs, precs; fov_volume=FOV, freeze
+            model, locs, precs; params=held, fov_volume=FOV
         )
         t_fits_defaults += @elapsed d = run_locmofit(
-            model, locs, precs; init_params=defaults, fov_volume=FOV, freeze
+            model, locs, precs; params=defaults, fov_volume=FOV
         )
         missed_estimate += a.loss > reference + 0.01
         missed_defaults += d.loss > reference + 0.01
@@ -64,22 +77,22 @@ function run(label, name, model; freeze=(), k="")
     )
 end
 
-const COAXIAL = (:x2, :y2, :vx2, :vy2)
+const COAXIAL = (:x2, :y2, :axis2)
 run("Ring", "ring", "Ring")
 run("SphericalCap", "spcap", "SphericalCap")
 run(
-    "DoubleRing, coaxial (x2, y2, vx2, vy2 frozen)",
+    "DoubleRing, coaxial (x2, y2, axis2 fixed)",
     "double_ring",
     "DoubleRing";
-    freeze=COAXIAL,
+    fixed=COAXIAL,
     k=1,
 )
 run("DoubleRing, all free", "double_ring", "DoubleRing"; k=1)
 run(
-    "SpCapRing, coaxial (x2, y2, vx2, vy2 frozen)",
+    "SpCapRing, coaxial (x2, y2, axis2 fixed)",
     "spcap_ring",
     "SpCapRing";
-    freeze=COAXIAL,
+    fixed=COAXIAL,
     k=1,
 )
 run("SpCapRing, all free", "spcap_ring", "SpCapRing"; k=1)

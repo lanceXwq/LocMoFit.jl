@@ -44,21 +44,22 @@ function tutorial(case, D)
     return (locs, precs, tutorial_parameters(case), t.is_signal .> 0.5, t.component)
 end
 
-# the moved start: positions +5 nm, sizes ×1.15 (a cap's κ′ ×0.85), starting axes +0.15 rad in θ and ϕ, blur 2 nm, and the default signal fraction (0.9) and shares (equal)
+# the moved start: positions +5 nm, sizes ×1.15 (a cap's κ′ ×0.85), starting axes +0.15 rad in θ and ϕ, blur 2 nm, and the default fractions: a background fraction of 0.1 and equal shares (ω₀ = log(f₀/f₁) with f₁ = 0.9/K for K components)
 function moved(p)
+    K = haskey(p, :omega2) ? 2 : 1
     shift(k, v) =
         if k in (:x, :y, :z, :x1, :y1, :z1, :x2, :y2, :z2)
             v + 5
         elseif k in (:r, :r1, :r2, :s, :s2)
             1.15v
-        elseif k in (:eta, :eta2)
-            atanh(0.85tanh(v))
+        elseif k in (:alpha, :alpha2)
+            2asin(0.85sin(v / 2))
         elseif k in (:theta, :phi, :theta1, :phi1, :theta2, :phi2)
             v + 0.15
         elseif k == :sigma
             2.0
-        elseif k == :logit_prob
-            log(9)
+        elseif k == :omega0
+            log(K / 9)
         elseif k == :omega2
             0.0
         else
@@ -70,7 +71,7 @@ end
 """
     start_params(θ; fixed=(), priors=(;))
 
-Starting values given in LocMoFit's parameter names (`theta`, `phi` for an axis, `alpha` for a cap's half-angle, `omega0`, `omega2` for the fractions), or in those of the tutorial's parameter files, which use earlier parametrizations: a cap's curvature `eta` (κ′ = tanh(`eta`)) and the signal fraction `logit_prob` (π = logistic(`logit_prob`)), as the `params` of `run_locmofit`: each quantity's `ParamToFit` with its value (an axis as `(theta, phi)`, κ′ = sin(`alpha`/2) or tanh(`eta`), the fractions softmax(`omega0`, 0, `omega2`) or, with `logit_prob`, (1 − π, π·softmax(0, `omega2`))), held (`Fixed()`) if its name is in `fixed`, and with its prior from `priors` if named there (else its default).
+Starting values given in LocMoFit's parameter names (`theta`, `phi` for an axis, `alpha` for a cap's half-angle, `omega0`, `omega2` for the fractions), as the `params` of `run_locmofit`: each quantity's `ParamToFit` with its value (an axis as `(theta, phi)`, κ′ = sin(`alpha`/2), the fractions softmax(`omega0`, 0, `omega2`)), held (`Fixed()`) if its name is in `fixed`, and with its prior from `priors` if named there (else its default).
 """
 function start_params(θ; fixed=(), priors=(;))
     values = Pair{Symbol,Any}[]
@@ -81,21 +82,15 @@ function start_params(θ; fixed=(), priors=(;))
             push!(values, Symbol(:axis, suffix) => (v, θ[Symbol(:phi, suffix)]))
         elseif startswith(name, "alpha")
             push!(values, Symbol(:kappa, name[6:end]) => sin(v / 2))
-        elseif startswith(name, "eta")
-            push!(values, Symbol(:kappa, name[4:end]) => tanh(v))
-        elseif !startswith(name, "phi") && !(k in (:omega0, :omega2, :logit_prob))
+        elseif !startswith(name, "phi") && !(k in (:omega0, :omega2))
             push!(values, k => v)
         end
     end
     lw = haskey(θ, :omega2) ? [0.0, θ.omega2] : [0.0]
-    w = softmax(lw)
     if haskey(θ, :omega0)
         push!(values, :fractions => Tuple(softmax([θ.omega0; lw])))
-    elseif haskey(θ, :logit_prob)
-        signal = 1 / (1 + exp(-θ.logit_prob))
-        push!(values, :fractions => (1 - signal, (signal .* w)...))
     elseif haskey(θ, :omega2)
-        push!(values, :fractions => Tuple(w))
+        push!(values, :fractions => Tuple(softmax(lw)))
     end
     return NamedTuple(
         k => ParamToFit(v, k in fixed ? Fixed() : get(priors, k, nothing)) for

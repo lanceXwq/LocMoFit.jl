@@ -91,7 +91,10 @@ function fit_sites(case, setting)
     d = readcsv(joinpath(DATA, file * ".csv"))
     labels = readcsv(joinpath(DATA, file * "_truth.csv"))
     truth = tutorial_parameters(case.name)
-    setting.background || (truth = merge(truth, (logit_prob=log(99),)))   # no background: start at 99% signal
+    # no background: start at 99% signal, ω₀ = log(f₀/f₁) with f₀ = 0.01 and f₁ = 0.99w₁
+    setting.background || (
+        truth = merge(truth, (omega0=log(1 / 99) + log1p(exp(get(truth, :omega2, -Inf))),))
+    )
     init = if setting.start === :truth
         truth
     else

@@ -10,7 +10,13 @@ fit = run_locmofit(
     "Ring",
     locs,
     loc_precs;
-    init_params=(x=15, y=0, z=25, r=57.5, theta=0.45, phi=0.95),
+    params=(
+        x=ParamToFit(15),
+        y=ParamToFit(0),
+        z=ParamToFit(25),
+        r=ParamToFit(57.5),
+        axis=ParamToFit((0.45, 0.95)),
+    ),
     fov_volume=300.0^3,
     history=true,
 )

@@ -10,10 +10,17 @@ fit = run_locmofit(
     "SpCapRing",
     locs,
     loc_precs;
-    init_params=(
-        x1=5, y1=5, z1=-25, r1=57.5, theta1=0.35, phi1=0.65, z2=95, s2=29, eta2=0.45
+    params=(
+        x1=ParamToFit(5),
+        y1=ParamToFit(5),
+        z1=ParamToFit(-25),
+        r1=ParamToFit(57.5),
+        axis1=ParamToFit((0.35, 0.65)),
+        z2=ParamToFit(95),
+        s2=ParamToFit(29),
+        kappa2=ParamToFit(0.42),
+        axis2=ParamToFit(Fixed()),
     ),
-    freeze=(:vx2, :vy2),
     fov_volume=300.0^3,
     history=true,
 )

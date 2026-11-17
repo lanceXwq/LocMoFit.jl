@@ -1,4 +1,4 @@
-"""LocMoFit.jl's `run_locmofit` for Python (and MATLAB, through `pyenv`), called through juliacall, with the arguments and the return value of LocMoFitPy's `run_locmofit`, so that a caller can switch between the two by changing the import.
+"""LocMoFit.jl's `run_locmofit` for Python (and MATLAB, through `pyenv`), called through juliacall, with the arguments and the return value of LocMoFitPy's `run_locmofit`, so that a caller can switch between the two by changing the import. The `params` are built with this module's `ParamToFit`, `Flat`, `Normal`, `LogNormal`, `Dirichlet`, `Watson`, `Bingham`, `Fixed` and `Tied`, which are LocMoFit.jl's and take LocMoFitPy's positional arguments: `ParamToFit(57.5)`, `ParamToFit((0.3, 0.8), Fixed())`, `ParamToFit(Tied("r1"))`, `ParamToFit(None, LogNormal(4.9, 1))`.
 
 juliacall needs a Julia environment that has LocMoFit and PythonCall at juliacall's own version. LocMoFit.jl's environment has both, once the two versions agree (update the older one: `Pkg.update("PythonCall")` there, or juliacall). Point juliacall at it before importing this module:
 
@@ -7,7 +7,7 @@ juliacall needs a Julia environment that has LocMoFit and PythonCall at juliacal
 Importing the module starts Julia and loads LocMoFit (a few seconds); the first fit of a session compiles (40–50 s; NOTES.md, Using LocMoFit.jl from SMAPpy).
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from typing import Any
 
 import numpy as np
@@ -23,15 +23,23 @@ _matrix = jl.seval("x -> Matrix{Float64}(x)")
 _numeric = jl.seval("x -> x isa AbstractArray{<:Real}")
 _DTYPES = {np.dtype("float64"): jl.Float64, np.dtype("float32"): jl.Float32}
 
+ParamToFit = jl.ParamToFit
+Flat = jl.Flat
+Normal = jl.Normal
+LogNormal = jl.LogNormal
+Dirichlet = jl.Dirichlet
+Watson = jl.Watson
+Bingham = jl.Bingham
+Fixed = jl.Fixed
+Tied = jl.Tied
+
 
 def run_locmofit(
     model: str,
     locs,
     loc_precisions,
     *,
-    init_params: Mapping[str, float] | None = None,
-    freeze: str | Sequence[str] = (),
-    tie: Mapping[str, str] | Sequence[tuple[str, str]] | None = None,
+    params: Mapping[str, Any] | None = None,
     max_iter: int = 200,
     tol: float = 1e-4,
     spacing: float = 3.0,
@@ -39,11 +47,9 @@ def run_locmofit(
     dtype: Any = "float64",
     background: bool = True,
     fov_volume: float | None = None,
-    signal_prior: tuple[float, float] | None = (5, 2),
-    share_prior: float | None = 5.0,
     history: bool = False,
 ) -> dict[str, Any]:
-    """Fit `model` to one site's localizations with LocMoFit.jl. The arguments and the returned dict are those of LocMoFitPy's `run_locmofit` (its docstring describes them): `locs` and `loc_precisions` are (N, D), and `model_points` is (M, 3). Only `model` differs: the name of a LocMoFit.jl model, spelled exactly (`"Ring"`, `"SphericalCap"`, `"DoubleRing"`, `"SpCapRing"`); model objects, other cases and aliases are LocMoFitPy's only."""
+    """Fit `model` to one site's localizations with LocMoFit.jl. The arguments and the returned dict are those of LocMoFitPy's `run_locmofit` (its docstring describes them): `locs` and `loc_precisions` are (N, D), `params` maps names to this module's `ParamToFit`, and `model_points` is (M, 3). Only `model` differs: the name of a LocMoFit.jl model, spelled exactly (`"Ring"`, `"SphericalCap"`, `"DoubleRing"`, `"SpCapRing"`); model objects, other cases and aliases are LocMoFitPy's only."""
     dtype = np.dtype(dtype)
     if dtype not in _DTYPES:
         raise ValueError(f"dtype must be float64 or float32, not {dtype}")
@@ -53,15 +59,11 @@ def run_locmofit(
         raise ValueError(
             f"loc_precisions must match locs shape; got {loc_precisions.shape} vs {locs.shape}"
         )
-    if isinstance(tie, Mapping):
-        tie = tie.items()
     fit = jl.run_locmofit(
         model,
         _matrix(locs.T),  # LocMoFit.jl takes D×N
         _matrix(loc_precisions.T),
-        init_params=_named(init_params),
-        freeze=(freeze,) if isinstance(freeze, str) else tuple(freeze),
-        tie=tuple((str(t), str(s)) for t, s in tie or ()),
+        params=_namedtuple(tuple(params or {}), tuple((params or {}).values())),
         max_iter=int(max_iter),
         tol=float(tol),
         spacing=float(spacing),
@@ -69,12 +71,6 @@ def run_locmofit(
         dtype=_DTYPES[dtype],
         background=bool(background),
         fov_volume=None if fov_volume is None else float(fov_volume),
-        signal_prior=(
-            None
-            if signal_prior is None
-            else tuple(float(v) for v in signal_prior)
-        ),
-        share_prior=None if share_prior is None else float(share_prior),
         history=bool(history),
     )
     hist = None

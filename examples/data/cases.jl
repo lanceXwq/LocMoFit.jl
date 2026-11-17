@@ -5,14 +5,14 @@ direction(θ, ϕ) = SA[sin(θ) * cos(ϕ), sin(θ) * sin(ϕ), cos(θ)]
 # the minimal rotation taking z to direction(θ, ϕ), which is LocMoFit's rotmat(θ, ϕ)
 rot(θ, ϕ) = θ == 0 ? SMatrix{3,3,Float64}(I) : rotation(direction(θ, ϕ))
 
-# DynMoSim's constant-area cap with scale s and dimensionless curvature κ is LocMoFit's cap with scale s and κ′ = tanh(eta)
+# DynMoSim's constant-area cap with scale s and dimensionless curvature κ is LocMoFit's cap with scale s and κ′ = sin(alpha/2), alpha its half-angle
 function cap(apex, R, s, κ)
     return Structure(SphereSurface(), Similarity(; scale=s, rot=R, shift=apex) ∘ Bend(κ))
 end
 ring(center, R, r) = Structure(Ring(), Similarity(; scale=r, rot=R, shift=center))
 
 ring_structure(p) = ring(SA[p.x, p.y, p.z], rot(p.theta, p.phi), p.r)
-spcap_structure(p) = cap(SA[p.x, p.y, p.z], rot(p.theta, p.phi), p.s, tanh(p.eta))
+spcap_structure(p) = cap(SA[p.x, p.y, p.z], rot(p.theta, p.phi), p.s, sin(p.alpha / 2))
 # the components' shares of the signal localizations, from LocMoFit's omega2 = log(w₂/w₁)
 shares(p) = (1 / (1 + exp(p.omega2)), 1 / (1 + exp(-p.omega2)))
 # ring 2 is placed in ring 1's frame
@@ -31,28 +31,25 @@ function spcap_ring_structure(p)
     return Composite(
         ring(t1, R1, p.r1) => w[1],
         cap(
-            t1 + R1 * SA[p.x2, p.y2, p.z2], R1 * rot(p.theta2, p.phi2), p.s2, tanh(p.eta2)
+            t1 + R1 * SA[p.x2, p.y2, p.z2],
+            R1 * rot(p.theta2, p.phi2),
+            p.s2,
+            sin(p.alpha2 / 2),
         ) => w[2],
     )
 end
 
 # a uniform background makes up 15% of the localizations (where there is one), so the true signal fraction is 0.85
 const BACKGROUND_FRACTION = 0.15
-const LOGIT_SIGNAL = log((1 - BACKGROUND_FRACTION) / BACKGROUND_FRACTION)
+# LocMoFit's omega0 = log(f₀/f₁) for the background fraction f₀ and component 1's fraction f₁ = (1 − f₀)·w₁, from component 1's share w₁ of the signal
+omega0(w₁) = log(BACKGROUND_FRACTION / ((1 - BACKGROUND_FRACTION) * w₁))
 
-# model name, true parameters (with the signal fraction, logit_prob, and the composites' shares, omega2: equal for the two rings, 30% ring and 70% cap), structure, and the mean number of signal localizations per site
+# model name, true parameters (with the fractions as omega0 and, for the composites, omega2 = log(w₂/w₁): equal shares for the two rings, 30% ring and 70% cap), structure, and the mean number of signal localizations per site
 const CASES = (
     ring=(
         model="Ring",
         truth=(
-            x=10.0,
-            y=-5.0,
-            z=20.0,
-            r=50.0,
-            theta=0.3,
-            phi=0.8,
-            sigma=0.0,
-            logit_prob=LOGIT_SIGNAL,
+            x=10.0, y=-5.0, z=20.0, r=50.0, theta=0.3, phi=0.8, sigma=0.0, omega0=omega0(1)
         ),
         structure=ring_structure,
         nsignal=100,
@@ -64,11 +61,11 @@ const CASES = (
             y=10.0,
             z=40.0,
             s=60.0,
-            eta=atanh(0.5),
+            alpha=2asin(0.5),
             theta=0.25,
             phi=-1.0,
             sigma=0.0,
-            logit_prob=LOGIT_SIGNAL,
+            omega0=omega0(1),
         ),
         structure=spcap_structure,
         nsignal=250,
@@ -90,7 +87,7 @@ const CASES = (
             phi2=0.0,
             sigma=0.0,
             omega2=0.0,
-            logit_prob=LOGIT_SIGNAL,
+            omega0=omega0(0.5),
         ),
         structure=double_ring_structure,
         nsignal=160,
@@ -108,12 +105,12 @@ const CASES = (
             y2=0.0,
             z2=90.0,
             s2=25.0,
-            eta2=atanh(0.5),
+            alpha2=2asin(0.5),
             theta2=0.0,
             phi2=0.0,
             sigma=0.0,
             omega2=log(7 / 3),
-            logit_prob=LOGIT_SIGNAL,
+            omega0=omega0(0.3),
         ),
         structure=spcap_ring_structure,
         nsignal=300,
