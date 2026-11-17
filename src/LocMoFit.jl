@@ -51,16 +51,16 @@ function fit_problem(
     # the starting axes, as theta, phi (thetak, phik for component k), center the orientation charts; they are not parameters
     axes = orientation_names(model)
     axis_names = Tuple(Iterators.flatten(axes))
-    # params in the optimizer's parameters: starting values, frozen parameters, ties, and priors
+    # params in the optimizer's parameters: starting values, fixed parameters, ties, and priors
     spec = specification(model, background, params, axes)
-    given, frozen, tie = spec.init, spec.frozen, spec.tie
-    # what params leaves open, frozen and tied parameters excepted, starts from the data (derivations/derivation.qmd), along the starting axis of component 1 if it is given or held
+    given, fixed, tie = spec.init, spec.fixed, spec.tie
+    # what params leaves open, fixed and tied parameters excepted, starts from the data (derivations/derivation.qmd), along the starting axis of component 1 if it is given or held
     θa, ϕa = axes[1]
     given_axis =
-        haskey(given, θa) || haskey(given, ϕa) || any(k -> k in frozen, chart_names(model))
+        haskey(given, θa) || haskey(given, ϕa) || any(k -> k in fixed, chart_names(model))
     axis = given_axis ? axis_vector(get(given, θa, 0), get(given, ϕa, 0)) : nothing
     targets = map(first, tie)
-    isopen(k) = !haskey(given, k) && !(k in frozen) && !(k in targets)
+    isopen(k) = !haskey(given, k) && !(k in fixed) && !(k in targets)
     estimate = if any(isopen, start_names(model, size(locs, 1)))
         estimate_start(model, locs, loc_precisions, axis)
     else
@@ -79,14 +79,14 @@ function fit_problem(
     if background && !haskey(init, :omega0)
         θ₀ = merge(θ₀, (omega0=log(dtype(1 / 9)) + logsumexp(log_weights(model, θ₀)),))
     end
-    pmap = ParameterMap(θ₀, frozen, tie)
+    pmap = ParameterMap(θ₀, fixed, tie)
     θ₀ = full_parameters(free_parameters(θ₀, pmap), pmap)      # with the ties applied
     # the values the points are generated from: point_params in place of the starting values, with the ties applied
     θpoints = if isempty(point_params)
         θ₀
     else
         θp = apply_init(θ₀, point_params)
-        mp = ParameterMap(θp, frozen, tie)
+        mp = ParameterMap(θp, fixed, tie)
         full_parameters(free_parameters(θp, mp), mp)
     end
     unit = unit_model(model, θpoints, starts; spacing)

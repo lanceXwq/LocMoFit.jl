@@ -668,7 +668,7 @@ end
         comps[1].area ≈ 4π * θ.s1^2
 end
 
-@testset "freezing" begin
+@testset "fixing" begin
     (_, model, θ, starts) = CASES[1]
     locs, precs = test_data(model, θ, starts)
     m = ParameterMap(θ, (:z, :sigma))
@@ -695,14 +695,14 @@ end
     @test full_parameters(u, m) == merge(θ, (r2=θ.r1,))        # the target takes the source's value
     u[:r1] = 47.0
     @test full_parameters(u, m).r2 == 47.0
-    # tied to a frozen parameter: frozen at its value; ties chain
+    # tied to a fixed parameter: fixed at its value; ties chain
     mf = ParameterMap(θ, (:r1,), (:r2 => :r1,))
     @test full_parameters(free_parameters(θ, mf), mf).r2 == θ.r1
     mc = ParameterMap(θ, (), (:r2 => :r1, :z2 => :r2))
     @test full_parameters(free_parameters(θ, mc), mc).z2 == θ.r1
     @test_throws ArgumentError ParameterMap(θ, (), (:r2 => :w,))             # unknown
     @test_throws ArgumentError ParameterMap(θ, (), (:r2 => :r1, :r2 => :x1))  # tied twice
-    @test_throws ArgumentError ParameterMap(θ, (:r2,), (:r2 => :r1,))         # frozen and tied
+    @test_throws ArgumentError ParameterMap(θ, (:r2,), (:r2 => :r1,))         # fixed and tied
     @test_throws ArgumentError ParameterMap(θ, (), (:r2 => :r1, :r1 => :r2))  # a cycle
 end
 
@@ -743,7 +743,7 @@ end
         "Ring", locs, precs; params=start_params(init; fixed=(:sigma,)), spacing=SPACING
     )
     @test r.history === nothing
-    @test r.parameters.sigma == 1.0                                     # frozen
+    @test r.parameters.sigma == 1.0                                     # fixed
     @test 0 < r.signal_fraction < 1 &&
         r.signal_fraction ≈ 1 / (1 + exp(r.parameters.omega0))
     @test r.weights == (1.0,)

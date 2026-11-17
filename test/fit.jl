@@ -16,7 +16,7 @@
 end
 
 @testset "fit of the ring in 2D" begin
-    # z is undetermined in 2D and frozen; the axis is known only up to its mirror image through the xy plane
+    # z is undetermined in 2D and fixed; the axis is known only up to its mirror image through the xy plane
     locs, precs, truth, signal = tutorial("ring2D", 2)
     r = run_locmofit(
         "Ring",

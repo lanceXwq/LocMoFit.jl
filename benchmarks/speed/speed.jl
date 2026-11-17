@@ -7,16 +7,16 @@ include(joinpath(@__DIR__, "..", "..", "test", "tutorial.jl"))
 
 const ACCURACY = joinpath(@__DIR__, "..", "accuracy", "data")
 const CASES = (
-    (name="ring", model="Ring", D=3, freeze=()),
-    (name="ring2D", model="Ring", D=2, freeze=(:z,)),
-    (name="double_ring", model="DoubleRing", D=3, freeze=()),
-    (name="spcap", model="SphericalCap", D=3, freeze=()),
-    (name="spcap_ring", model="SpCapRing", D=3, freeze=()),
+    (name="ring", model="Ring", D=3, fixed=()),
+    (name="ring2D", model="Ring", D=2, fixed=(:z,)),
+    (name="double_ring", model="DoubleRing", D=3, fixed=()),
+    (name="spcap", model="SphericalCap", D=3, fixed=()),
+    (name="spcap_ring", model="SpCapRing", D=3, fixed=()),
 )
 
 function start(case)
     truth = tutorial_parameters(case.name)
-    return merge(moved(truth), NamedTuple{case.freeze}(map(k -> truth[k], case.freeze)))
+    return merge(moved(truth), NamedTuple{case.fixed}(map(k -> truth[k], case.fixed)))
 end
 
 function site_speed(case, dtype)
@@ -24,7 +24,7 @@ function site_speed(case, dtype)
     cols = columns(case.D)
     locs, precs = matrix(d, cols[1]), matrix(d, cols[2])
     kw = (
-        params=start_params(start(case); fixed=case.freeze), dtype, fov_volume=300.0^case.D
+        params=start_params(start(case); fixed=case.fixed), dtype, fov_volume=300.0^case.D
     )
     p, u = fit_problem(LocMoFit.build_model(case.model), locs, precs; kw...)
     N, M = size(locs, 2), sum(length, p.ranges)
@@ -70,7 +70,7 @@ function throughput(case)
         ),
         sites,
     )
-    kw = (params=start_params(start(case); fixed=case.freeze), fov_volume=300.0^case.D)
+    kw = (params=start_params(start(case); fixed=case.fixed), fov_volume=300.0^case.D)
     fit(k) = run_locmofit(case.model, data[k]...; kw...).loss
     fit(1)                                   # compile on one thread first
     serial = @elapsed foreach(fit, eachindex(data))

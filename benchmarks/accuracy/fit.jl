@@ -70,11 +70,11 @@ function errors(model, fitted, truth; D=3)
 end
 
 const CASES = (
-    (name="ring", model="Ring", D=3, freeze=()),
-    (name="ring2D", model="Ring", D=2, freeze=(:z,)),        # the ring sites without z; z is then undetermined
-    (name="spcap", model="SphericalCap", D=3, freeze=()),
-    (name="double_ring", model="DoubleRing", D=3, freeze=()),
-    (name="spcap_ring", model="SpCapRing", D=3, freeze=()),
+    (name="ring", model="Ring", D=3, fixed=()),
+    (name="ring2D", model="Ring", D=2, fixed=(:z,)),        # the ring sites without z; z is then undetermined
+    (name="spcap", model="SphericalCap", D=3, fixed=()),
+    (name="double_ring", model="DoubleRing", D=3, fixed=()),
+    (name="spcap_ring", model="SpCapRing", D=3, fixed=()),
 )
 const SETTINGS = (
     (background=false, start=:truth, dtype=Float64),
@@ -98,7 +98,7 @@ function fit_sites(case, setting)
     init = if setting.start === :truth
         truth
     else
-        merge(moved(truth), NamedTuple{case.freeze}(map(k -> truth[k], case.freeze)))
+        merge(moved(truth), NamedTuple{case.fixed}(map(k -> truth[k], case.fixed)))
     end
     cols = columns(case.D)
     sites = sort(unique(d.site))
@@ -109,7 +109,7 @@ function fit_sites(case, setting)
             case.model,
             locs,
             precs;
-            params=start_params(init; fixed=case.freeze),
+            params=start_params(init; fixed=case.fixed),
             dtype=setting.dtype,
             fov_volume=300.0^case.D,
         )

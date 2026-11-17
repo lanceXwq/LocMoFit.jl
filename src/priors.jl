@@ -295,7 +295,7 @@ share_names(::SimpleModel) = ()
 """
     specification(model, background, params, axes)
 
-What `params` (a `NamedTuple` of [`ParamToFit`](@ref)) asks of a fit of `model`, in the optimizer's parameters: the starting values (`init`, with each starting axis under its `axes` names), the parameters held (`frozen`), the ties (`tie`, `target => source`), and the priors as `quantity => prior` (`priors`; flat ones left out). Throws an `ArgumentError` for an unknown name, a prior that does not fit its quantity, or a value outside its quantity's range.
+What `params` (a `NamedTuple` of [`ParamToFit`](@ref)) asks of a fit of `model`, in the optimizer's parameters: the starting values (`init`, with each starting axis under its `axes` names), the parameters held (`fixed`), the ties (`tie`, `target => source`), and the priors as `quantity => prior` (`priors`; flat ones left out). Throws an `ArgumentError` for an unknown name, a prior that does not fit its quantity, or a value outside its quantity's range.
 """
 function specification(model::Model, background::Bool, params::NamedTuple, axes)
     table = quantities(model, background)
@@ -306,7 +306,7 @@ function specification(model::Model, background::Bool, params::NamedTuple, axes)
     )
     kinds = Dict(table)
     init = Pair{Symbol,Float64}[]
-    frozen, tie, priors = Symbol[], Pair{Symbol,Symbol}[], Pair{Quantity,Prior}[]
+    fixed, tie, priors = Symbol[], Pair{Symbol,Symbol}[], Pair{Quantity,Prior}[]
     for (name, (q, default)) in table
         spec = get(params, name, ParamToFit(nothing, nothing))
         spec isa ParamToFit ||
@@ -319,7 +319,7 @@ function specification(model::Model, background::Bool, params::NamedTuple, axes)
         )
         spec.value === nothing || append!(init, start_values(q, spec.value, axes))
         if prior isa Fixed
-            append!(frozen, parameter_names(q))
+            append!(fixed, parameter_names(q))
         elseif prior isa Tied
             haskey(kinds, prior.source) && prior.source != name || throw(
                 ArgumentError(
@@ -337,7 +337,7 @@ function specification(model::Model, background::Bool, params::NamedTuple, axes)
             push!(priors, q => prior)
         end
     end
-    return (init=NamedTuple(init), frozen=Tuple(frozen), tie=Tuple(tie), priors=priors)
+    return (init=NamedTuple(init), fixed=Tuple(fixed), tie=Tuple(tie), priors=priors)
 end
 
 """
