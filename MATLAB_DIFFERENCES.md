@@ -36,7 +36,7 @@ The comparison is against SMAP commit `d750f5ac` (2026-09-01); LocMoFit itself l
 | Position | `x`, `y`, `z` (nm) | `x`, `y`, `z` (nm) | — |
 | Orientation | `xrot`, `yrot`, `zrot` in degrees, with R = Rx·Ry·Rz. When all three are free, the fit uses an axis-angle vector instead. | LocMoFit.jl: the axis by two tangent-chart coordinates `vx`, `vy` around the starting axis, given as `theta`, `phi` (no pole; `derivations/derivation.qmd`). There is no rotation about the model's own axis, so only rotationally symmetric models can be fully oriented. | axis: done; rotation about the axis: open |
 | Scale | `xscale`, `yscale`, `zscale` (fixed at 1 by default) | none | open |
-| Model weight | `weight`, normalized among the models of a layer | LocMoFit.jl: one share per component of a composite, softmax(0, `omega2`, …, `omegaK`), free by default and freezable, with a symmetric Dirichlet prior on the shares (`share_prior`, default α = 5, since 2026-11-14) that keeps every share above 0; LocMoFitPy the same. | done |
+| Model weight | `weight`, normalized among the models of a layer | LocMoFit.jl: one share per component of a composite, softmax(0, `omega2`, …, `omegaK`), free by default and freezable, with a Dirichlet prior (default α = 5 for each component, since 2026-11-14) that keeps every share above 0; on the branch `priors`, the background is fraction 0 of the same softmax and one Dirichlet(2, 5, …, 5) covers it and the components (2026-11-17); LocMoFitPy the same. | done |
 
 ### Model types and sampling
 

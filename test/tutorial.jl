@@ -70,7 +70,7 @@ end
 """
     start_params(θ; fixed=(), priors=(;))
 
-Starting values given in LocMoFit's parameter names (`theta`, `phi` for an axis, `alpha` for a cap's half-angle, `logit_prob`, `omega2`), or in those of the tutorial's parameter files, which name a cap's curvature `eta` (κ′ = tanh(`eta`), an earlier parametrization), as the `params` of `run_locmofit`: each quantity's `ParamToFit` with its value (an axis as `(theta, phi)`, κ′ = sin(`alpha`/2) or tanh(`eta`), the signal fraction logistic(`logit_prob`), the shares softmax(0, `omega2`)), held (`Fixed()`) if its name is in `fixed`, and with its prior from `priors` if named there (else its default).
+Starting values given in LocMoFit's parameter names (`theta`, `phi` for an axis, `alpha` for a cap's half-angle, `omega0`, `omega2` for the fractions), or in those of the tutorial's parameter files, which use earlier parametrizations: a cap's curvature `eta` (κ′ = tanh(`eta`)) and the signal fraction `logit_prob` (π = logistic(`logit_prob`)), as the `params` of `run_locmofit`: each quantity's `ParamToFit` with its value (an axis as `(theta, phi)`, κ′ = sin(`alpha`/2) or tanh(`eta`), the fractions softmax(`omega0`, 0, `omega2`) or, with `logit_prob`, (1 − π, π·softmax(0, `omega2`))), held (`Fixed()`) if its name is in `fixed`, and with its prior from `priors` if named there (else its default).
 """
 function start_params(θ; fixed=(), priors=(;))
     values = Pair{Symbol,Any}[]
@@ -83,19 +83,27 @@ function start_params(θ; fixed=(), priors=(;))
             push!(values, Symbol(:kappa, name[6:end]) => sin(v / 2))
         elseif startswith(name, "eta")
             push!(values, Symbol(:kappa, name[4:end]) => tanh(v))
-        elseif k == :logit_prob
-            push!(values, :signal => 1 / (1 + exp(-v)))
-        elseif k == :omega2
-            push!(values, :shares => (1 / (1 + exp(v)), 1 / (1 + exp(-v))))
-        elseif !startswith(name, "phi")
+        elseif !startswith(name, "phi") && !(k in (:omega0, :omega2, :logit_prob))
             push!(values, k => v)
         end
+    end
+    lw = haskey(θ, :omega2) ? [0.0, θ.omega2] : [0.0]
+    w = softmax(lw)
+    if haskey(θ, :omega0)
+        push!(values, :fractions => Tuple(softmax([θ.omega0; lw])))
+    elseif haskey(θ, :logit_prob)
+        signal = 1 / (1 + exp(-θ.logit_prob))
+        push!(values, :fractions => (1 - signal, (signal .* w)...))
+    elseif haskey(θ, :omega2)
+        push!(values, :fractions => Tuple(w))
     end
     return NamedTuple(
         k => ParamToFit(v, k in fixed ? Fixed() : get(priors, k, nothing)) for
         (k, v) in values
     )
 end
+
+softmax(x) = exp.(x) ./ sum(exp.(x))
 
 angle_deg(a, b) = acosd(clamp(dot(a, b) / (norm(a) * norm(b)), -1, 1))   # a cap's axis has a sign
 axis_deg(a, b) = min(angle_deg(a, b), 180 - angle_deg(a, b))             # a ring's axis has none

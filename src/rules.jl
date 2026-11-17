@@ -4,7 +4,7 @@ function EnzymeRules.augmented_primal(
     config::EnzymeRules.RevConfigWidth{1},
     ::Const{typeof(log_likelihood)},
     ::Type{<:Active},
-    args::Vararg{Annotation,8},
+    args::Vararg{Annotation,7},
 )
     ℓ, ∇ℓ = likelihood_pass(map(a -> a.val, args)..., Val(true))
     return EnzymeRules.AugmentedReturn(
@@ -23,7 +23,6 @@ function EnzymeRules.reverse(
     ranges,
     σ,
     logw,
-    a,
     b,
 )
     # with runtime activity, inactive points may come as Duplicated with the primal as their shadow
@@ -38,7 +37,6 @@ function EnzymeRules.reverse(
         nothing,
         active(σ, ∇ℓ.σ),
         active(logw, ∇ℓ.logw),
-        active(a, ∇ℓ.a),
         active(b, ∇ℓ.b),
     )
 end

@@ -1,16 +1,16 @@
-# Priors on every quantity a fit estimates, and `ParamToFit`, which gives each quantity its starting value and its prior (derivations/derivation.qmd, Priors on every parameter). A prior is a density of a quantity of the structure (a position, a size, a curvature, an axis, the signal fraction, the shares), whatever coordinates the optimizer uses for it, and the loss adds its log density with no Jacobian (@eq-full-posterior).
+# Priors on every quantity a fit estimates, and `ParamToFit`, which gives each quantity its starting value and its prior (derivations/derivation.qmd, Priors on every parameter). A prior is a density of a quantity of the structure (a position, a size, a curvature, an axis, the fractions of the mixture), whatever coordinates the optimizer uses for it, and the loss adds its log density with no Jacobian (@eq-full-posterior).
 
 """
     Prior
 
-A prior on one quantity of a fit, or on a group of them (an axis, the shares), given in [`ParamToFit`](@ref). Its log density, up to a constant, is added to the log-likelihood (derivations/derivation.qmd, @eq-full-posterior). The densities: [`Flat`](@ref), [`Normal`](@ref), [`LogNormal`](@ref), [`Beta`](@ref), [`Dirichlet`](@ref), [`Watson`](@ref); and the point masses [`Fixed`](@ref) and [`Tied`](@ref), which hold a quantity at its starting value or at another quantity's value.
+A prior on one quantity of a fit, or on a group of them (an axis, the fractions), given in [`ParamToFit`](@ref). Its log density, up to a constant, is added to the log-likelihood (derivations/derivation.qmd, @eq-full-posterior). The densities: [`Flat`](@ref), [`Normal`](@ref), [`LogNormal`](@ref), [`Dirichlet`](@ref), [`Watson`](@ref), [`Bingham`](@ref); and the point masses [`Fixed`](@ref) and [`Tied`](@ref), which hold a quantity at its starting value or at another quantity's value.
 """
 abstract type Prior end
 
 """
     Flat()
 
-A constant density: no prior term. It is proper on a bounded quantity (a cap's `kappa` in [−1, 1], an axis on the sphere, the signal fraction, the shares) and improper on a position or a size, which the localizations must then determine.
+A constant density: no prior term. It is proper on a bounded quantity (a cap's `kappa` in [−1, 1], an axis on the sphere, the fractions) and improper on a position or a size, which the localizations must then determine.
 """
 struct Flat <: Prior end
 
@@ -45,38 +45,22 @@ struct LogNormal{T<:Real} <: Prior
 end
 
 """
-    Beta(a, b)
-
-The Beta density of the signal fraction, with `a, b ≥ 1` (below 1 it grows without bound at 0 or 1). It acts like a + b − 2 extra localizations, a − 1 of them signal (derivations/derivation.qmd, @eq-posterior). The default is `Beta(5, 2)`: mode 0.8, as much as 5 localizations.
-"""
-struct Beta{T<:Real} <: Prior
-    a::T
-    b::T
-    function Beta(a::Real, b::Real)
-        a >= 1 && b >= 1 || throw(
-            ArgumentError(
-                "Beta: a and b must be at least 1, got ($a, $b): below 1 the density grows without bound at 0 or 1",
-            ),
-        )
-        T = promote_type(typeof(a), typeof(b))
-        return new{T}(a, b)
-    end
-end
-
-"""
     Dirichlet(alpha)
+    Dirichlet(alpha0, alpha1, …, alphaK)
 
-The symmetric Dirichlet density of a composite's shares, with `alpha ≥ 1` (below 1 it grows without bound as a share goes to 0). It acts like alpha − 1 extra signal localizations for each component and keeps every share above 0, so that a component cannot be switched off (derivations/derivation.qmd, @eq-share-prior). The default is `Dirichlet(5)`.
+The Dirichlet density of the fractions of a fit's mixture, ∝ ∏ₖ fₖ^(alphaₖ − 1) (derivations/derivation.qmd, @eq-fraction-prior): with a background, its fraction f₀ and each component's f₁, …, f_K (the parameters in that order); without one, the components' shares. One `alpha` is the same for every fraction. Each must be at least 1 (below 1 the density grows without bound as a fraction goes to 0). It acts like alphaₖ − 1 extra localizations from the background and from each component (@eq-fraction-map), and keeps every fraction above 0, so that no component can be switched off. On the signal fraction π = 1 − f₀ and the shares it is a Beta density of π, with parameters Σₖ₌₁ᴷ(alphaₖ − 1) + 1 and alpha0, and the Dirichlet density of the shares with alpha1, …, alphaK (@eq-fraction-split). The default is `Dirichlet(2, 5, …, 5)` with a background (for one component the Beta(5, 2) density of π, mode 0.8; for two, as 8 extra signal localizations and 1 background one, a pull toward π = 8/9 that grows with the number of components), and `Dirichlet(5)` without.
 """
-struct Dirichlet{T<:Real} <: Prior
-    alpha::T
-    function Dirichlet(alpha::Real)
-        alpha >= 1 || throw(
+struct Dirichlet{A<:Union{Real,Tuple{Vararg{Real}}}} <: Prior
+    alpha::A
+    function Dirichlet(alpha::Real...)
+        isempty(alpha) && throw(ArgumentError("Dirichlet: alpha is missing"))
+        all(>=(1), alpha) || throw(
             ArgumentError(
-                "Dirichlet: alpha must be at least 1, got $alpha: below 1 the density grows without bound as a share goes to 0",
+                "Dirichlet: every alpha must be at least 1, got $alpha: below 1 the density grows without bound as a fraction goes to 0",
             ),
         )
-        return new{typeof(alpha)}(alpha)
+        a = length(alpha) == 1 ? only(alpha) : promote(alpha...)
+        return new{typeof(a)}(a)
     end
 end
 
@@ -131,7 +115,7 @@ Tied(source::AbstractString) = Tied(Symbol(source))
     ParamToFit(value)
     ParamToFit(prior)
 
-What is known about one quantity of a fit before it: its starting `value` (`nothing` to estimate it from the localizations, or else start from its default) and its `prior` (a [`Prior`](@ref); `nothing` for the quantity's default prior). Both are in the quantity's own terms: a position or a size in nm, a cap's `kappa` (κ′), an axis as `(theta, phi)`, the signal fraction, the shares as a tuple. [`run_locmofit`](@ref) lists the quantities and their default priors.
+What is known about one quantity of a fit before it: its starting `value` (`nothing` to estimate it from the localizations, or else start from its default) and its `prior` (a [`Prior`](@ref); `nothing` for the quantity's default prior). Both are in the quantity's own terms: a position or a size in nm, a cap's `kappa` (κ′), an axis as `(theta, phi)`, the fractions as a tuple. [`run_locmofit`](@ref) lists the quantities and their default priors.
 """
 struct ParamToFit{V,P<:Union{Nothing,Prior}}
     value::V
@@ -152,16 +136,8 @@ struct Size{n} <: Quantity end
 struct Curvature{n,s} <: Quantity end
 # the axis of component k, from its chart coordinates vx, vy: as m = normalize((vx, vy, 1)), the axis in the chart's frame
 struct Axis{k,vx,vy} <: Quantity end
-# the signal fraction π = logistic(logit_prob)
-struct SignalFraction <: Quantity end
-# the shares softmax(0, ω₂, …), with the parameters ω₂, … named `names`
-struct Shares{names} <: Quantity end
-
-# the log of a fraction and of its complement, which the Beta density needs, formed without the fraction (derivations/derivation.qmd, @eq-logfractions)
-struct LogFraction{T}
-    log::T
-    log1m::T
-end
+# the log fractions of the mixture, log softmax(ω₀, 0, ω₂, …) with a background and log softmax(0, ω₂, …) without (derivations/derivation.qmd, @eq-logfractions), with the parameters ω₂, … named `names`
+struct Fractions{background,names} <: Quantity end
 
 quantity(::Location{n}, θ) where {n} = getfield(θ, n)
 quantity(::Size{n}, θ) where {n} = abs(getfield(θ, n))
@@ -171,11 +147,12 @@ function quantity(::Axis{k,vx,vy}, θ) where {k,vx,vy}
     r = inv(sqrt(1 + a^2 + b^2))
     return (a * r, b * r, r)
 end
-function quantity(::SignalFraction, θ)
-    return LogFraction(-softplus(-θ.logit_prob), -softplus(θ.logit_prob))
-end
-function quantity(::Shares{names}, θ) where {names}
-    lw = (zero(θ.sigma), ntuple(i -> getfield(θ, names[i]), Val(length(names)))...)
+function quantity(::Fractions{background,names}, θ) where {background,names}
+    lw = (
+        (background ? (θ.omega0,) : ())...,
+        zero(θ.sigma),
+        ntuple(i -> getfield(θ, names[i]), Val(length(names)))...,
+    )
     return lw .- logsumexp(lw)
 end
 
@@ -190,8 +167,7 @@ function log_density(p::LogNormal, q)
     l = log(q)
     return -l - ((l - p.mu) / p.sigma)^2 / 2
 end
-log_density(p::Beta, f::LogFraction) = (p.a - 1) * f.log + (p.b - 1) * f.log1m
-log_density(p::Dirichlet, logw::Tuple) = (p.alpha - 1) * sum(logw)
+log_density(p::Dirichlet, logf::Tuple) = sum((p.alpha .- 1) .* logf)
 function log_density(p::ChartQuadratic, m)
     a = p.a
     return a[1] * m[1]^2 +
@@ -224,24 +200,23 @@ supports(::Quantity, ::Union{Flat,Fixed}) = true
 supports(::Union{Location,Size,Curvature}, ::Union{Normal,Tied}) = true
 supports(::Size, ::LogNormal) = true
 supports(::Axis, ::Union{Watson,Bingham}) = true
-supports(::SignalFraction, ::Beta) = true
-supports(::Shares, ::Dirichlet) = true
+supports(::Fractions, ::Dirichlet) = true
 supports(::Quantity, ::Prior) = false
 
 describe(::Location) = "position"
 describe(::Size) = "size"
 describe(::Curvature) = "curvature"
 describe(::Axis) = "axis"
-describe(::SignalFraction) = "signal fraction"
-describe(::Shares) = "set of shares"
+describe(::Fractions) = "set of fractions"
 
 # the parameters a quantity is computed from
 parameter_names(::Location{n}) where {n} = (n,)
 parameter_names(::Size{n}) where {n} = (n,)
 parameter_names(::Curvature{n}) where {n} = (n,)
 parameter_names(::Axis{k,vx,vy}) where {k,vx,vy} = (vx, vy)
-parameter_names(::SignalFraction) = (:logit_prob,)
-parameter_names(::Shares{names}) where {names} = names
+function parameter_names(::Fractions{background,names}) where {background,names}
+    return background ? (:omega0, names...) : names
+end
 
 # A quantity's value as starting values of the parameters; `axes` are the names that set each component's starting axis (orientation_names)
 start_values(q::Union{Location,Size}, v::Real, axes) = (only(parameter_names(q)) => v,)
@@ -254,25 +229,28 @@ function start_values(::Axis{k}, v, axes) where {k}
         throw(ArgumentError("an axis is given as (theta, phi), got $(repr(v))"))
     return (axes[k][1] => v[1], axes[k][2] => v[2])
 end
-function start_values(::SignalFraction, v::Real, axes)
-    0 < v < 1 || throw(ArgumentError("the signal fraction must lie in (0, 1), got $v"))
-    return (:logit_prob => log(v) - log1p(-v),)
-end
-function start_values(::Shares{names}, v, axes) where {names}
-    length(v) == length(names) + 1 && all(>(0), v) || throw(
-        ArgumentError(
-            "the shares are given as $(length(names) + 1) positive numbers, got $(repr(v))",
-        ),
+# ωₖ = log(fₖ/f₁), with f₁ the fraction of component 1 (derivations/derivation.qmd, @eq-softmax)
+function start_values(q::Fractions{background}, v, axes) where {background}
+    n = nfractions(q)
+    length(v) == n && all(>(0), v) || throw(
+        ArgumentError("the fractions are given as $n positive numbers, got $(repr(v))")
     )
-    return Tuple(n => log(v[i + 1]) - log(v[1]) for (i, n) in enumerate(names))
+    ref = background ? 2 : 1
+    others = Tuple(i for i in 1:n if i != ref)
+    return Tuple(n => log(v[i]) - log(v[ref]) for (n, i) in zip(parameter_names(q), others))
 end
 function start_values(q::Quantity, v, axes)
     return throw(ArgumentError("a $(describe(q)) is not given as $(repr(v))"))
 end
 
 const SIZE_PRIOR = LogNormal(log(50.0) + 1, 1.0)
-const SIGNAL_PRIOR = Beta(5.0, 2.0)
-const SHARE_PRIOR = Dirichlet(5.0)
+# the default Dirichlet's alpha for the background's fraction and for each component's
+const BACKGROUND_ALPHA = 2.0
+const COMPONENT_ALPHA = 5.0
+
+function nfractions(::Fractions{background,names}) where {background,names}
+    return length(names) + 1 + background
+end
 
 # The quantities of a simple model as component `index` of a fit, whose parameter names end in `suffix` ("" for a model fitted alone), each with its default prior: its position, its shape (shape_quantities) and its axis.
 function quantities(m::SimpleModel, suffix, index)
@@ -290,7 +268,7 @@ end
 """
     quantities(model, background)
 
-The quantities of a fit of `model`, each as `name => (quantity, default prior)`: those of every component (`quantities(component, suffix, index)`), the blur `sigma`, a composite's `shares`, and with a background the `signal` fraction.
+The quantities of a fit of `model`, each as `name => (quantity, default prior)`: those of every component (`quantities(component, suffix, index)`), the blur `sigma`, and the `fractions` of the mixture (with a background or several components).
 """
 function quantities(m::SimpleModel, background::Bool)
     return (quantities(m, "", 1)..., common_quantities(m, background)...)
@@ -298,11 +276,21 @@ end
 function common_quantities(m::Model, background)
     return (
         :sigma => (Size{:sigma}(), Flat()),
-        share_quantities(m)...,
-        (background ? (:signal => (SignalFraction(), SIGNAL_PRIOR),) : ())...,
+        fraction_quantities(share_names(m), background)...,
     )
 end
-share_quantities(::SimpleModel) = ()
+# the fractions of the background (if any) and of the components (ω₂, … named `names`); none for a single component without a background
+function fraction_quantities(names, background)
+    !background && isempty(names) && return ()
+    prior = if background
+        Dirichlet(BACKGROUND_ALPHA, ntuple(_ -> COMPONENT_ALPHA, length(names) + 1)...)
+    else
+        Dirichlet(COMPONENT_ALPHA)
+    end
+    return (:fractions => (Fractions{background,names}(), prior),)
+end
+# the names of the parameters ω₂, …, ω_K of the components' fractions
+share_names(::SimpleModel) = ()
 
 """
     specification(model, background, params, axes)
@@ -362,8 +350,16 @@ function prior_terms(priors, unit, T)
 end
 prior_term(q, p::Normal, unit, T) = PriorTerm(q, Normal(T(p.mean), T(p.sd)))
 prior_term(q, p::LogNormal, unit, T) = PriorTerm(q, LogNormal(T(p.mu), T(p.sigma)))
-prior_term(q, p::Beta, unit, T) = PriorTerm(q, Beta(T(p.a), T(p.b)))
-prior_term(q, p::Dirichlet, unit, T) = PriorTerm(q, Dirichlet(T(p.alpha)))
+function prior_term(q::Fractions, p::Dirichlet, unit, T)
+    p.alpha isa Real ||
+        length(p.alpha) == nfractions(q) ||
+        throw(
+            ArgumentError(
+                "the Dirichlet prior has $(length(p.alpha)) alphas for $(nfractions(q)) fractions",
+            ),
+        )
+    return PriorTerm(q, Dirichlet(T.(p.alpha)...))
+end
 prior_term(q::Axis, p::Watson, unit, T) = prior_term(q, Bingham(p), unit, T)
 function prior_term(q::Axis{k}, p::Bingham, unit, T) where {k}
     R₀ = unit isa Tuple ? unit[k].chart : unit.chart

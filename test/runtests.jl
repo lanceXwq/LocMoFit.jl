@@ -98,8 +98,8 @@ const CASES = (
 )
 const SPACING = 4.0
 const FOV = 300.0           # side of the field of view (nm)
-# the fractions, away from their defaults: signal fraction logistic(1.2) ≈ 0.77, and composites' shares
-fractions(model) = model isa Composite ? (logit_prob=1.2, omega2=0.4) : (logit_prob=1.2,)
+# the fractions' parameters, away from their defaults: the background's ω₀ = log(f₀/f₁) = −1.2, and composites' shares
+fractions(model) = model isa Composite ? (omega0=-1.2, omega2=0.4) : (omega0=-1.2,)
 # the starting axes as run_locmofit takes them: theta, phi, or thetak, phik for component k
 function axes_init(model, starts)
     return if model isa Composite
@@ -130,7 +130,7 @@ function case_params(model, θ, starts; background=true, kwargs...)
     f = if background
         fractions(model)
     else
-        Base.structdiff(fractions(model), NamedTuple{(:logit_prob,)})
+        Base.structdiff(fractions(model), NamedTuple{(:omega0,)})
     end
     return start_params(merge(without_chart(θ), f, axes_init(model, starts)); kwargs...)
 end
@@ -164,8 +164,8 @@ function problem(
     free_parameters(merge(full_parameters(u, p.parameter_map), chart), p.parameter_map)
 end
 
-# The likelihood of derivations/derivation.qmd with plain loops: per localization, the mean of the Gaussian densities over each component's points (variances precision² + σ²), the components weighted by w, mixed with a uniform background of density 1/V at signal fraction f; minus the log posterior with the log prior `logprior`, per localization.
-function reference_loss(locs, precs, Ys, w, σ; f=nothing, V=1.0, logprior=0.0)
+# The likelihood of derivations/derivation.qmd with plain loops: per localization, the mean of the Gaussian densities over each component's points (variances precision² + σ²), the components weighted by their fractions w, mixed with a uniform background of density 1/V at fraction f0 (`nothing`: no background); minus the log posterior with the log prior `logprior`, per localization.
+function reference_loss(locs, precs, Ys, w, σ; f0=nothing, V=1.0, logprior=0.0)
     D, N = size(locs)
     total = 0.0
     for n in 1:N
@@ -175,17 +175,23 @@ function reference_loss(locs, precs, Ys, w, σ; f=nothing, V=1.0, logprior=0.0)
         ps = sum(
             w[k] * mean(density(Y[:, m]) for m in axes(Y, 2)) for (k, Y) in enumerate(Ys)
         )
-        total += log(f === nothing ? ps : f * ps + (1 - f) / V)
+        total += log(f0 === nothing ? ps : ps + f0 / V)
     end
     return -(total + logprior) / N
 end
 
-# The default priors as run_locmofit documents them: a log-normal most probable at 50 nm (median 50e nm), with logarithmic spread 1, on every ring's radius and cap's scale, Beta(5, 2) on the signal fraction, Dirichlet(5) on a composite's shares, and flat otherwise.
+# The default priors as run_locmofit documents them: a log-normal most probable at 50 nm (median 50e nm), with logarithmic spread 1, on every ring's radius and cap's scale, Dirichlet(2, 5, …, 5) on the fractions with a background and Dirichlet(5) on a composite's without, and flat otherwise.
 function default_priors(model, background)
+    K = model isa Composite ? length(model.components) : 1
     return merge(
         NamedTuple(k => LogNormal(log(50) + 1, 1) for k in names_of(model, (:r, :s))),
-        background ? (signal=Beta(5, 2),) : (;),
-        model isa Composite ? (shares=Dirichlet(5),) : (;),
+        if background
+            (fractions=Dirichlet(2, ntuple(_ -> 5, K)...),)
+        elseif K > 1
+            (fractions=Dirichlet(5),)
+        else
+            (;)
+        end,
     )
 end
 # the names of a model's quantities among `of` (a ring's :r, a cap's :s and :kappa), with the component's number for a composite
@@ -216,15 +222,13 @@ function every_prior(model)
         end,
     )
 end
-# The log prior of derivations/derivation.qmd (Priors on every parameter) with plain formulas, for the priors `priors` at the parameters θ: each density at its quantity, a size's magnitude, a cap's κ′ = sign(s)·sin(α/2), an axis by the independent construction `pose` (for component 2, in component 1's frame), the signal fraction and the shares.
+# The log prior of derivations/derivation.qmd (Priors on every parameter) with plain formulas, for the priors `priors` at the parameters θ: each density at its quantity, a size's magnitude, a cap's κ′ = sign(s)·sin(α/2), an axis by the independent construction `pose` (for component 2, in component 1's frame), the fractions.
 function reference_log_prior(model, θ, starts, priors)
     total = 0.0
     for (name, prior) in pairs(priors)
         s = string(name)
-        q = if name == :signal
-            1 / (1 + exp(-θ.logit_prob))
-        elseif name == :shares
-            shares(model, θ)
+        q = if name == :fractions
+            all_fractions(model, θ, haskey(θ, :omega0))
         elseif startswith(s, "axis")
             k = s[5:end]
             pose(starts[k == "" ? 1 : parse(Int, k)], θ[Symbol(:vx, k)], θ[Symbol(:vy, k)])[
@@ -245,24 +249,26 @@ function reference_log_prior(model, θ, starts, priors)
             prior.kappa * dot(direction(prior.theta, prior.phi), q)^2
         elseif prior isa Bingham
             sum(t.kappa * dot(direction(t.theta, t.phi), q)^2 for t in prior.terms)
-        elseif prior isa Beta
-            (prior.a - 1) * log(q) + (prior.b - 1) * log(1 - q)
         elseif prior isa Dirichlet
-            (prior.alpha - 1) * sum(log, q)
+            sum((collect(prior.alpha) .- 1) .* log.(q))
         else
             0.0
         end
     end
     return total
 end
-# each component's points (first D rows), and the components' shares, from the parameters
+# each component's points (first D rows), and the fractions softmax(ω₀, 0, ω₂, …) from the parameters: with a background, its fraction first
 parts(p, θ, D) = [model_points(p.model, p.unit_model, θ)[1:D, r] for r in p.ranges]
-function shares(model, θ)
-    ω = if model isa Composite
-        [0.0; [θ[Symbol(:omega, k)] for k in 2:length(model.components)]]
-    else
-        [0.0]
-    end
+function all_fractions(model, θ, background)
+    ω = [
+        background ? [θ.omega0] : []
+        0.0
+        if model isa Composite
+            [θ[Symbol(:omega, k)] for k in 2:length(model.components)]
+        else
+            []
+        end
+    ]
     return exp.(ω) ./ sum(exp.(ω))
 end
 
@@ -280,7 +286,6 @@ end
             (1:20,),
             T(σ),
             (zero(T),),
-            zero(T),
             T(-Inf),
         ) for n in 1:10
     ]
@@ -303,26 +308,25 @@ end
             exp_nonpositive(T(-Inf)) == 0
     end
 
-    # the gradient computed along with the value, against central differences: with respect to the points, σ, the log weights of two components and the two log fractions of the mixture with the background, in 3D and 2D (where the points' third coordinate has no effect)
-    ranges, logw, a, b = (1:8, 9:20), (log(0.3), log(0.7)), log(0.8), log(0.2) - 3log(30.0)
+    # the gradient computed along with the value, against central differences: with respect to the points, σ, the log fractions of two components and the log of the background's term, in 3D and 2D (where the points' third coordinate has no effect)
+    ranges, logw, b = (1:8, 9:20), (log(0.24), log(0.56)), log(0.2) - 3log(30.0)
     for D in (3, 2)
-        f(y, σ, logw, a, b) = log_likelihood(x[1:D, :], s[1:D, :], y, ranges, σ, logw, a, b)
-        ℓ, g = likelihood_pass(x[1:D, :], s[1:D, :], y, ranges, σ, logw, a, b, Val(true))
-        @test ℓ ≈ f(y, σ, logw, a, b)
+        f(y, σ, logw, b) = log_likelihood(x[1:D, :], s[1:D, :], y, ranges, σ, logw, b)
+        ℓ, g = likelihood_pass(x[1:D, :], s[1:D, :], y, ranges, σ, logw, b, Val(true))
+        @test ℓ ≈ f(y, σ, logw, b)
         h = 1e-6
         e(d, m) = [i == d && j == m ? h : 0.0 for i in 1:3, j in 1:20]
         @test g.points ≈ [
-            (f(y + e(d, m), σ, logw, a, b) - f(y - e(d, m), σ, logw, a, b)) / 2h for
+            (f(y + e(d, m), σ, logw, b) - f(y - e(d, m), σ, logw, b)) / 2h for
             d in 1:3, m in 1:20
         ] rtol = 1e-6
         D == 2 && @test all(iszero, g.points[3, :])
-        @test g.σ ≈ (f(y, σ + h, logw, a, b) - f(y, σ - h, logw, a, b)) / 2h rtol = 1e-6
-        @test g.logw[1] ≈
-            (f(y, σ, logw .+ (h, 0), a, b) - f(y, σ, logw .- (h, 0), a, b)) / 2h rtol = 1e-6
-        @test g.logw[2] ≈
-            (f(y, σ, logw .+ (0, h), a, b) - f(y, σ, logw .- (0, h), a, b)) / 2h rtol = 1e-6
-        @test g.a ≈ (f(y, σ, logw, a + h, b) - f(y, σ, logw, a - h, b)) / 2h rtol = 1e-6
-        @test g.b ≈ (f(y, σ, logw, a, b + h) - f(y, σ, logw, a, b - h)) / 2h rtol = 1e-6
+        @test g.σ ≈ (f(y, σ + h, logw, b) - f(y, σ - h, logw, b)) / 2h rtol = 1e-6
+        @test g.logw[1] ≈ (f(y, σ, logw .+ (h, 0), b) - f(y, σ, logw .- (h, 0), b)) / 2h rtol =
+            1e-6
+        @test g.logw[2] ≈ (f(y, σ, logw .+ (0, h), b) - f(y, σ, logw .- (0, h), b)) / 2h rtol =
+            1e-6
+        @test g.b ≈ (f(y, σ, logw, b + h) - f(y, σ, logw, b - h)) / 2h rtol = 1e-6
     end
 end
 
@@ -401,18 +405,23 @@ end
 end
 
 @testset "loss against a reference" begin
-    # the posterior with its default priors, then with each default replaced (the signal fraction's, the shares', and flat sizes) and with every other quantity given a prior; each distinct variant once (the signal fraction's need a background, the shares' a composite); the log prior does not depend on D, so in 2D only the defaults
+    # the posterior with its default priors, then with each default replaced (the fractions' by a symmetric Dirichlet, by one with an alpha for each fraction, and by a flat density; flat sizes) and with every other quantity given a prior; each distinct variant once (the fractions need a background or a composite); the log prior does not depend on D, so in 2D only the defaults
     for (_, model, θ, starts) in CASES, D in (3, 2), background in (true, false)
         composite = model isa Composite
+        nfractions = background + (composite ? length(model.components) : 1)
+        has_fractions = background || composite
         variants = if D == 2
             ((;),)
         else
             unique((
                 (;),
-                (background ? (signal=Beta(197, 50),) : (;)),
-                (background ? (signal=Flat(),) : (;)),
-                (composite ? (shares=Dirichlet(2.5),) : (;)),
-                (composite ? (shares=Flat(),) : (;)),
+                (has_fractions ? (fractions=Dirichlet(2.5),) : (;)),
+                (if has_fractions
+                        (fractions=Dirichlet((1.5 .+ (1:nfractions))...),)
+                    else
+                        (;)
+                    end),
+                (has_fractions ? (fractions=Flat(),) : (;)),
                 NamedTuple(k => Flat() for k in names_of(model, (:r, :s))),
                 every_prior(model),
             ))
@@ -422,13 +431,14 @@ end
             p, u = problem(model, θ, starts, locs, precs; background, priors)
             θp = full_parameters(u, p.parameter_map)
             used = merge(default_priors(model, background), priors)
+            f = all_fractions(model, θp, background)
             @test loss(u, p) ≈ reference_loss(
                 locs,
                 precs,
                 parts(p, θp, D),
-                shares(model, θp),
+                background ? f[2:end] : f,
                 θp.sigma;
-                f=background ? 1 / (1 + exp(-θp.logit_prob)) : nothing,
+                f0=background ? f[1] : nothing,
                 V=FOV^D,
                 logprior=reference_log_prior(model, θp, starts, used),
             ) rtol = 1e-10
@@ -436,7 +446,7 @@ end
     end
 end
 
-@testset "the share prior's optimum" begin
+@testset "the fraction prior's optimum" begin
     # two rings 2 µm apart along their axis, n₁ and n₂ localizations exactly on them, no background: every localization comes from its own ring (q = 0 or 1 in derivations/derivation.qmd, @eq-shares), so the share that maximizes the posterior is (n₂ + α - 1)/(n + 2(α - 1)) (@eq-share-map), n₂/n for the flat Dirichlet(1), whose term is 0 (Dirichlet(1) rather than Flat() reuses the compiled loss). The fits also check what a fit without a background returns
     n1, n2, r = 30, 10, 50.0
     ring(n, z) = reduce(
@@ -467,13 +477,13 @@ end
             precs;
             params=merge(
                 start_params(θ; fixed=keys(start_params(θ))),
-                (shares=ParamToFit(Dirichlet(α)),),
+                (fractions=ParamToFit(Dirichlet(α)),),
             ),
             background=false,
             tol=1e-10,
         )
         @test fit.weights[2] ≈ (n2 + α - 1) / (n1 + n2 + 2(α - 1)) rtol = 1e-6
-        @test !haskey(fit.parameters, :logit_prob) &&
+        @test !haskey(fit.parameters, :omega0) &&
             fit.signal_fraction === nothing &&
             isfinite(fit.loss)
     end
@@ -508,7 +518,7 @@ end
 end
 
 @testset "priors" begin
-    # where the likelihood does not depend on a quantity, the fit ends at its prior's mode (derivations/derivation.qmd, Priors on every parameter): the height of a ring in 2D under a normal density; and the cap of a SpCapRing whose share is held at 10⁻²⁰, fitted to a ring's localizations with a background, so that the cap's density is negligible next to the background's: its height z2 at the normal's mean, its scale at the log-normal's mode exp(μ - σ²), its κ′ at the normal's mean, and its axis along ±d under a Bingham density that holds it near the plane perpendicular to ν = (θ, ϕ) = (0.5 + π/2, 1) (κ = −5) and pulls it toward d = (0.5, 1), which is perpendicular to ν, within that plane (κ = 2): d is the eigenvector of A with the largest eigenvalue, 2, against 0 and −5
+    # where the likelihood does not depend on a quantity, the fit ends at its prior's mode (derivations/derivation.qmd, Priors on every parameter): the height of a ring in 2D under a normal density; and the cap of a SpCapRing whose fraction is held at 10⁻²⁰, fitted to a ring's localizations with a background, so that the cap's density is negligible next to the background's: its height z2 at the normal's mean, its scale at the log-normal's mode exp(μ - σ²), its κ′ at the normal's mean, and its axis along ±d under a Bingham density that holds it near the plane perpendicular to ν = (θ, ϕ) = (0.5 + π/2, 1) (κ = −5) and pulls it toward d = (0.5, 1), which is perpendicular to ν, within that plane (κ = 2): d is the eigenvector of A with the largest eigenvalue, 2, against 0 and −5
     (_, model, θ, starts) = CASES[1]
     locs, precs = test_data(model, θ, starts; D=2)
     held = Tuple(k for k in keys(case_params(model, θ, starts)) if k != :z)
@@ -529,14 +539,14 @@ end
     start = merge(
         ring,
         (x2=0.0, y2=0.0, z2=85.0, s2=30.0, alpha2=π / 3, theta2=0.2, phi2=-0.7),
-        (sigma=2.0, logit_prob=1.2),
+        (sigma=2.0,),
     )
     free = (:z2, :s2, :kappa2, :axis2)
     params = merge(
         start_params(
             start; fixed=Tuple(k for k in keys(start_params(start)) if !(k in free))
         ),
-        (shares=ParamToFit((1.0, 1e-20), Fixed()),),
+        (fractions=ParamToFit((0.2, 0.8, 1e-20), Fixed()),),
     )
     priors = (
         z2=Normal(70, 5),
@@ -574,14 +584,17 @@ end
         Ring(), locs, precs; params=(axis=ParamToFit(Normal(0, 1)),)
     )
     @test_throws ArgumentError fit_problem(
-        Ring(), locs, precs; params=(signal=ParamToFit(Dirichlet(5)),)
+        Ring(), locs, precs; params=(fractions=ParamToFit(Normal(0, 1)),)
     )
     @test_throws ArgumentError fit_problem(
-        Ring(), locs, precs; background=false, params=(signal=ParamToFit(0.5),)
-    )   # no signal fraction without a background
+        Ring(), locs, precs; background=false, params=(fractions=ParamToFit((1.0,)),)
+    )   # no fractions for one component without a background
     @test_throws ArgumentError fit_problem(
-        Ring(), locs, precs; params=(signal=ParamToFit(1.0),)
-    )  # outside (0, 1)
+        Ring(), locs, precs; params=(fractions=ParamToFit((0.0, 1.0)),)
+    )   # not positive
+    @test_throws ArgumentError fit_problem(
+        DoubleRing(), locs, precs; params=(fractions=ParamToFit(Dirichlet(2, 5)),)
+    )   # an alpha for each of the three fractions
     @test_throws ArgumentError fit_problem(
         SphericalCap(), locs, precs; params=(kappa=ParamToFit(1.0),)
     )
@@ -589,8 +602,8 @@ end
         Ring(), locs, precs; params=(axis=ParamToFit(0.3),)
     )   # an axis is (theta, phi)
     @test_throws ArgumentError fit_problem(
-        DoubleRing(), locs, precs; params=(shares=ParamToFit((0.5, 0.3, 0.2)),)
-    )
+        DoubleRing(), locs, precs; params=(fractions=ParamToFit((0.5, 0.5)),)
+    )   # three fractions with a background
     @test_throws ArgumentError fit_problem(
         DoubleRing(), locs, precs; params=(r2=ParamToFit(Tied(:z1)),)
     )   # a size tied to a position
@@ -602,8 +615,9 @@ end
     )
     @test_throws ArgumentError Normal(0, 0)
     @test_throws ArgumentError LogNormal(0, -1)
-    @test_throws ArgumentError Beta(0.5, 2)
     @test_throws ArgumentError Dirichlet(0.5)
+    @test_throws ArgumentError Dirichlet(2, 0.5)
+    @test_throws ArgumentError Dirichlet()
     @test_throws ArgumentError Bingham()
 end
 
@@ -731,7 +745,7 @@ end
     @test r.history === nothing
     @test r.parameters.sigma == 1.0                                     # frozen
     @test 0 < r.signal_fraction < 1 &&
-        r.signal_fraction ≈ 1 / (1 + exp(-r.parameters.logit_prob))
+        r.signal_fraction ≈ 1 / (1 + exp(r.parameters.omega0))
     @test r.weights == (1.0,)
     @test r.components[1].axis ≈
         chart_rotation(r.unit_model.chart, r.parameters.vx, r.parameters.vy)[:, 3]
@@ -907,14 +921,13 @@ end
         @test keys(estimate_start(m, locs[1:D, :], precs[1:D, :], nothing)) ==
             LocMoFit.start_names(m, D)
     end
-    # a model without an estimate of its shape starts from its defaults, but with component 1 at the localizations' weighted center: here c, about which the two rings are symmetric
+    # a model without an estimate of its shape starts from its defaults, but with component 1 at the localizations' weighted center: here c, about which the two rings are symmetric; the background's fraction starts at 0.1 and the three components' at 0.3 each, so ω₀ = log(0.1/0.3)
     p, u = fit_problem(Composite(Ring(), Ring(), Ring()), two, fill(2.0, size(two)))
     θ = full_parameters(u, p.parameter_map)
     @test [θ.x1, θ.y1, θ.z1] ≈ c
-    @test Base.structdiff(θ, NamedTuple{(:x1, :y1, :z1)}) == Base.structdiff(
-        merge(default_parameters(p.model, Float64), (logit_prob=log(9),)),
-        NamedTuple{(:x1, :y1, :z1)},
-    )
+    @test θ.omega0 ≈ log(1 / 3)
+    @test Base.structdiff(θ, NamedTuple{(:x1, :y1, :z1, :omega0)}) ==
+        Base.structdiff(default_parameters(p.model, Float64), NamedTuple{(:x1, :y1, :z1)})
 end
 
 include("fit.jl")

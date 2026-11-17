@@ -3,58 +3,47 @@
 """
     loss(u, p)
 
-The objective of a fit: minus the log posterior of the parameters, per localization (derivations/derivation.qmd, @eq-full-posterior). `u` holds the free parameters; `p` (from [`fit_problem`](@ref)) holds the model, the map to all parameters, the unit model (unit points and chart frames) and the rows of each component's points (`ranges`), the localizations and their precisions (`D×N`), the background: whether there is one and the log of the field of view's volume, and the priors (`priors`, a tuple of [`PriorTerm`](@ref)s).
+The objective of a fit: minus the log posterior of the parameters, per localization (derivations/derivation.qmd, @eq-full-posterior). `u` holds the free parameters; `p` (from [`fit_problem`](@ref)) holds the model, the map to all parameters, the unit model (unit points and chart frames) and the rows of each component's points (`ranges`), the localizations and their precisions (`D×N`), the background: whether there is one (with the parameter `omega0` of its fraction) and the log of the field of view's volume, and the priors (`priors`, a tuple of [`PriorTerm`](@ref)s).
 """
 function loss(u, p)
     θ = full_parameters(u, p.parameter_map)
     points = model_points(p.model, p.unit_model, θ)
+    # the log fractions of the mixture, log softmax(ω₀, 0, ω₂, …) (derivations/derivation.qmd, @eq-logfractions)
     lw = log_weights(p.model, θ)
-    logw = lw .- logsumexp(lw)
-    N = size(p.locs, 2)
-    prior = log_prior(p.priors, θ)
-    if !p.background
-        ℓ = log_likelihood(
-            p.locs,
-            p.loc_prec,
-            points,
-            p.ranges,
-            θ.sigma,
-            logw,
-            zero(θ.sigma),
-            oftype(θ.sigma, -Inf),
-        )
-        return -(ℓ + prior) / N
+    if p.background
+        lse = logsumexp((θ.omega0, lw...))
+        b = θ.omega0 - lse - p.log_volume
+    else
+        lse = logsumexp(lw)
+        b = oftype(θ.sigma, -Inf)
     end
-    logπ, log1mπ = -softplus(-θ.logit_prob), -softplus(θ.logit_prob)
-    ℓ = log_likelihood(
-        p.locs, p.loc_prec, points, p.ranges, θ.sigma, logw, logπ, log1mπ - p.log_volume
-    )
-    return -(ℓ + prior) / N
+    ℓ = log_likelihood(p.locs, p.loc_prec, points, p.ranges, θ.sigma, lw .- lse, b)
+    return -(ℓ + log_prior(p.priors, θ)) / size(p.locs, 2)
 end
 
 """
-    log_likelihood(locs, loc_prec, points, ranges, σ, logw, a, b)
+    log_likelihood(locs, loc_prec, points, ranges, σ, logw, b)
 
-Σₙ log(eᵃ pₙ + eᵇ) over the localizations (the columns of the `D×N` `locs`, with precisions `loc_prec`), where pₙ is the structure's density at localization n: for each component k, whose model points are the columns `ranges[k]` of `points` (of which the first `D` rows are used), the mean of the Gaussians around its points with per-axis variances `loc_prec² + σ²`; the components weighted by `exp.(logw)`. In a fit, `a` is the log signal fraction and `b` the log of the background's density times its fraction; `b = -Inf` means no background.
+Σₙ log(pₙ + eᵇ) over the localizations (the columns of the `D×N` `locs`, with precisions `loc_prec`), where pₙ is the structure's density at localization n: for each component k, whose model points are the columns `ranges[k]` of `points` (of which the first `D` rows are used), the mean of the Gaussians around its points with per-axis variances `loc_prec² + σ²`; the components weighted by `exp.(logw)`. In a fit, `logw` are the log fractions of the components and `b` the log of the background's density times its fraction (derivations/derivation.qmd, @eq-mixture); `b = -Inf` means no background.
 
 The squared distances are formed from differences (not expanded), so the result keeps its precision far from the origin, also in `Float32`. For each localization the terms of its model points are kept, so that [`likelihood_pass`](@ref) computes the gradient from them without evaluating them again; Enzyme uses that gradient through the rule in `rules.jl`.
 """
-function log_likelihood(locs, loc_prec, points, ranges, σ, logw, a, b)
-    return first(likelihood_pass(locs, loc_prec, points, ranges, σ, logw, a, b, Val(false)))
+function log_likelihood(locs, loc_prec, points, ranges, σ, logw, b)
+    return first(likelihood_pass(locs, loc_prec, points, ranges, σ, logw, b, Val(false)))
 end
 
 """
-    likelihood_pass(locs, loc_prec, points, ranges, σ, logw, a, b, Val(gradient)) -> (ℓ, ∇ℓ)
+    likelihood_pass(locs, loc_prec, points, ranges, σ, logw, b, Val(gradient)) -> (ℓ, ∇ℓ)
 
-[`log_likelihood`](@ref) and, with `Val(true)`, its gradient with respect to `points` (`3×M`), `σ`, `logw`, `a` and `b`, as a `NamedTuple` (`nothing` with `Val(false)`). For each localization, the terms of every component are kept in a buffer, one per point, and once the localization's density is known one more pass over them gives the derivatives with respect to the points and the variances (derivations/derivation.qmd).
+[`log_likelihood`](@ref) and, with `Val(true)`, its gradient with respect to `points` (`3×M`), `σ`, `logw` and `b`, as a `NamedTuple` (`nothing` with `Val(false)`). For each localization, the terms of every component are kept in a buffer, one per point, and once the localization's density is known one more pass over them gives the derivatives with respect to the points and the variances (derivations/derivation.qmd).
 """
 function likelihood_pass(
-    locs::AbstractMatrix, loc_prec, points, ranges, σ, logw, a, b, gradient::Val
+    locs::AbstractMatrix, loc_prec, points, ranges, σ, logw, b, gradient::Val
 )
     return if size(locs, 1) == 3
-        likelihood_pass(Val(3), locs, loc_prec, points, ranges, σ, logw, a, b, gradient)
+        likelihood_pass(Val(3), locs, loc_prec, points, ranges, σ, logw, b, gradient)
     else
-        likelihood_pass(Val(2), locs, loc_prec, points, ranges, σ, logw, a, b, gradient)
+        likelihood_pass(Val(2), locs, loc_prec, points, ranges, σ, logw, b, gradient)
     end
 end
 
@@ -66,7 +55,6 @@ function likelihood_pass(
     ranges::NTuple{K,UnitRange{Int}},
     σ::T,
     logw::NTuple{K,T},
-    a::T,
     b::T,
     ::Val{G},
 ) where {D,T,K,G}
@@ -75,7 +63,7 @@ function likelihood_pass(
     dY = ntuple(_ -> zeros(T, G ? M : 0), Val(D))
     E = Vector{T}(undef, M)                                # one localization's terms, one per point
     lognorm = map((lw, r) -> lw - log(T(length(r))), logw, ranges)                      # log(wₖ/Mₖ)
-    ℓ = dσ = da = db = zero(T)
+    ℓ = dσ = db = zero(T)
     dlogw = ntuple(_ -> zero(T), Val(K))
     for n in axes(locs, 2)
         x = ntuple(d -> locs[d, n], Val(D))
@@ -85,11 +73,10 @@ function likelihood_pass(
         parts = map(r -> component_terms!(E, Y, x, h, r), ranges)
         t = map((ln, part) -> ln + part.lse, lognorm, parts)
         S = logsumexp(t)
-        L = logaddexp(a + c + S, b)
+        L = logaddexp(c + S, b)
         ℓ += L
         if G
-            ρ = exp(a + c + S - L)                         # the probability that the localization is signal
-            da += ρ
+            ρ = exp(c + S - L)                             # the probability that the localization is signal
             db += 1 - ρ
             g = map(t -> ρ * exp(t - S), t)                # ∂L/∂ each component's lse
             dlogw = dlogw .+ g
@@ -108,7 +95,7 @@ function likelihood_pass(
     for d in 1:D
         dpoints[d, :] .= dY[d]
     end
-    return ℓ, (points=dpoints, σ=dσ, logw=dlogw, a=da, b=db)
+    return ℓ, (points=dpoints, σ=dσ, logw=dlogw, b=db)
 end
 
 # Σ_d h_d (y_dm - x_d)², the exponent of point m's Gaussian. Here and in the loops below, `@inbounds` is written inside every closure: it does not reach into them from the loop, and a bounds check stops the loop from vectorizing.
@@ -175,4 +162,3 @@ function logsumexp(x::Tuple)
     return m + log(sum(exp.(x .- m)))
 end
 logaddexp(a, b) = max(a, b) + log1p(exp(-abs(a - b)))
-softplus(x) = max(x, zero(x)) + log1p(exp(-abs(x)))      # log(1 + eˣ)
