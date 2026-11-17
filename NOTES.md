@@ -91,7 +91,7 @@ A start near the cap's localizations worked as well as the prior there, but that
 
 **Measured on the accuracy benchmark** (`benchmarks/accuracy/share_prior_2026-11-14.txt`, against the same run with `share_prior = nothing`): the geometry did not change (every error within a few percent of its scatter), the simple models were identical, and the double ring's share (true 1/2) kept its bias. The ring's share of the cap with a ring (true 0.3) moved by +0.0064 to +0.0075 (z 2.4–2.7, against a scatter of 0.012 over the sites). For fixed responsibilities, `derivations/derivation.qmd` (@eq-share-map) predicts +0.0052 to +0.0054 for these sites' 265 to 361 signal localizations; the rest comes from the responsibilities, which move with the shares. `test/fit.jl` takes the composites' tolerances from this run and allows that share its bias.
 
-## Priors on every parameter (2026-11-14, branch `priors`, a prototype)
+## Priors on every parameter (2026-11-14 on the branch `priors`; merged into main 2026-11-17)
 
 **Why.** The owner's decision (2026-11-14): every quantity a fit estimates has a prior, flat for some for now, and what is known about a quantity is stated as a proper prior, not as a bound or a soft penalty. The share prior was the first such case; the size penalties (sizes ≥ 1 nm) were the last constraints outside the posterior. `derivations/derivation.qmd`, Priors on every parameter, has the math: each prior is a density of a quantity of the structure, added with no Jacobian, so the fit is the most probable value of the quantities whatever coordinates the optimizer uses.
 
