@@ -17,7 +17,7 @@ On Apple Silicon, precompilation prints `CpuId` errors ("does not provide inform
 
 The examples need `CSV`, `DataFrames` and `GLMakie`, which are not in any project here; they assume the owner's global environment and are run from the repo root (relative CSV paths).
 
-CI and `[compat]` target Julia 1.13 only (see Compatibility in `../AGENTS.md`); do not add code paths for older versions.
+CI tests Julia `lts`, `1` and `pre` (the prerelease may fail), and `[compat]` starts at the LTS, 1.10 (see Compatibility in `../AGENTS.md`); do not add code paths for anything older.
 
 ## Layout
 
