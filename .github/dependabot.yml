@@ -5,3 +5,16 @@ updates:
     directory: "/" # Location of package manifests
     schedule:
       interval: "weekly"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+  - package-ecosystem: "julia"
+    directories:
+      - "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      julia-dependencies:
+        patterns:
+          - "*"
