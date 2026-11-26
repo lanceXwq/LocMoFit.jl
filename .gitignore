@@ -6,7 +6,6 @@ __pycache__/
 *.mp4
 # Scratch at the repo root only; tutorial data and helpers under examples/ are committed
 /*.csv
-/TODO.md
 /plotting*
 /simulation*.jl
 /scratch.jl
