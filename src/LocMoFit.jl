@@ -23,7 +23,7 @@ include("rules.jl")
 export Ring, SphericalCap, Composite, DoubleRing, SpCapRing, run_locmofit
 export ParamToFit, Flat, Normal, LogNormal, Dirichlet, Watson, Bingham, Fixed, Tied
 
-# BFGS rather than L-BFGS: with a few tens of parameters its n×n matrix costs nothing, and it is insensitive to the parameters' different scales (nm, radians, 1/nm), which DynMoFit found to matter for L-BFGS (DynMoFit.jl/NOTES.md)
+# BFGS rather than L-BFGS: with a few tens of parameters its n×n matrix costs nothing, and it is insensitive to the parameters' different scales (nm, radians, 1/nm), which DynMoFit found to matter for L-BFGS (DynMoFit.jl/DESIGN.md)
 const BFGS_BACKTRACKING = BFGS(; linesearch=Optim.LineSearches.BackTracking())
 
 """
@@ -54,7 +54,7 @@ function fit_problem(
     # params in the optimizer's parameters: starting values, fixed parameters, ties, and priors
     spec = specification(model, background, params, axes)
     given, fixed, tie = spec.init, spec.fixed, spec.tie
-    # what params leaves open, fixed and tied parameters excepted, starts from the data (derivations/derivation.qmd), along the starting axis of component 1 if it is given or held
+    # what params leaves open, fixed and tied parameters excepted, starts from the data (derivations/derivations.qmd), along the starting axis of component 1 if it is given or held
     θa, ϕa = axes[1]
     given_axis =
         haskey(given, θa) || haskey(given, ϕa) || any(k -> k in fixed, chart_names(model))
@@ -75,7 +75,7 @@ function fit_problem(
     θ₀ = default_parameters(model, dtype)
     background && (θ₀ = merge(θ₀, (omega0=zero(dtype),)))
     θ₀ = apply_init(θ₀, Base.structdiff(init, NamedTuple{axis_names}))
-    # a background fraction not given starts at 0.1, whatever the components' shares: ω₀ = log(f₀/f₁) with f₁ = 0.9w₁ (derivations/derivation.qmd, @eq-softmax)
+    # a background fraction not given starts at 0.1, whatever the components' shares: ω₀ = log(f₀/f₁) with f₁ = 0.9w₁ (derivations/derivations.qmd, @eq-softmax)
     if background && !haskey(init, :omega0)
         θ₀ = merge(θ₀, (omega0=log(dtype(1 / 9)) + logsumexp(log_weights(model, θ₀)),))
     end
@@ -206,7 +206,7 @@ end
     run_locmofit(model, locs, loc_precisions; params, max_iter, tol, spacing, point_params, dtype, background,
                  fov_volume, history)
 
-Fit `model` to one site's localizations by maximizing the posterior of derivations/derivation.qmd: a mixture of the structure and a uniform background, with a prior on every quantity (@eq-full-posterior), by BFGS with a backtracking line search (gradients by Enzyme). `model` is a [`Model`](@ref), such as `Ring()` or `Composite(Ring(), SphericalCap())`, or the name of a function in LocMoFit that returns one, such as `"Ring"` or `"DoubleRing"`. A fit runs on one thread. Fitting many sites in threads (`Threads.@threads`) is much faster, but has rarely crashed Julia with memory corruption, for reasons not yet known; separate processes are safe.
+Fit `model` to one site's localizations by maximizing the posterior of derivations/derivations.qmd: a mixture of the structure and a uniform background, with a prior on every quantity (@eq-full-posterior), by BFGS with a backtracking line search (gradients by Enzyme). `model` is a [`Model`](@ref), such as `Ring()` or `Composite(Ring(), SphericalCap())`, or the name of a function in LocMoFit that returns one, such as `"Ring"` or `"DoubleRing"`. A fit runs on one thread. Fitting many sites in threads (`Threads.@threads`) is much faster, but has rarely crashed Julia with memory corruption, for reasons not yet known; separate processes are safe.
 
 - `locs`, `loc_precisions`: `D×N` positions and per-axis precisions (standard deviations), in nm, with `D ∈ {2, 3}`. A 2D fit uses the first two coordinates of the model.
 - `params`: a `NamedTuple` of [`ParamToFit`](@ref), the starting value and the prior of each quantity it names, both in the quantity's own terms; an unknown name throws. A component k of a composite has its number appended to its quantities' names (`x1`, `r1`, `axis2`, …). The quantities and their default priors:
@@ -216,12 +216,12 @@ Fit `model` to one site's localizations by maximizing the posterior of derivatio
     - `axis`: the axis, as `(theta, phi)`, its polar angle and azimuth; for component k > 1, in component 1's frame. `Flat()`, uniform on the sphere; it takes a `Watson` or `Bingham` density. It is fitted as the coordinates `vx`, `vy` of a tangent chart centered on its starting value.
     - `sigma`: the blur, in nm, added to every precision in quadrature. `Flat()`.
     - `fractions` (with a background or several components): the fractions of the localizations from the background and from each component, as a tuple `(f0, f1, …, fK)` (without a background `(f1, …, fK)`, the components' shares), positive numbers of which only the ratios count. `Dirichlet(2, 5, …, 5)` (`Dirichlet(5)` without a background): as much as 1 background localization and 4 from each component, so that the background and every component keep some of the localizations and no component can be switched off. On the signal fraction π = 1 − f0 it acts as K·4 signal localizations and 1 background one, so that for one component it is the Beta(5, 2) density of π (mode 0.8) and for two pulls π toward 8/9; it moves a component's share w of the signal by K(α − 1)(1/K − w)/(n + K(α − 1)) for n signal localizations and α = 5 (with two components and 100 signal localizations, a share of 0.3 becomes 0.315).
-  `Fixed()` holds a quantity at its value and `Tied(:r1)` at another quantity's value throughout (derivations/derivation.qmd, Fixed and tied values). A starting value not given is estimated from the localizations ([`estimate_start`](@ref); derivations/derivation.qmd, Starting values from the data), unless the quantity is fixed or tied: then, and wherever nothing is estimated, it starts from its default (`default_parameters`, plus a background fraction of 0.1 with a background). The estimate covers a `Ring`, a `SphericalCap` and a composite of two of them sharing an axis (such as `DoubleRing` and `SpCapRing`): in 3D the position, the axis and the shape, and for a composite the second component's distance along the axis (`z2`) and the shares; in 2D only the position. Any other model gets only the position of component 1, at the weighted center of the localizations. The blur and the background fraction start from their defaults, and an axis not estimated from (0, 0), along z. An axis given for component 1, or held, is used instead of the estimated one, and the shape is estimated along it.
+  `Fixed()` holds a quantity at its value and `Tied(:r1)` at another quantity's value throughout (derivations/derivations.qmd, Fixed and tied values). A starting value not given is estimated from the localizations ([`estimate_start`](@ref); derivations/derivations.qmd, Starting values from the data), unless the quantity is fixed or tied: then, and wherever nothing is estimated, it starts from its default (`default_parameters`, plus a background fraction of 0.1 with a background). The estimate covers a `Ring`, a `SphericalCap` and a composite of two of them sharing an axis (such as `DoubleRing` and `SpCapRing`): in 3D the position, the axis and the shape, and for a composite the second component's distance along the axis (`z2`) and the shares; in 2D only the position. Any other model gets only the position of component 1, at the weighted center of the localizations. The blur and the background fraction start from their defaults, and an axis not estimated from (0, 0), along z. An axis given for component 1, or held, is used instead of the estimated one, and the shape is estimated along it.
 - `max_iter`: the most iterations the optimizer takes.
 - `tol`: the fit has converged when no component of the gradient of [`loss`](@ref) exceeds `tol`. The default, 1e-4, leaves the parameters much closer to the optimum than their statistical error (a position within about 0.005 nm for a ring of 100 localizations, whose error is about 0.7 nm).
 - `spacing`: the distance between model points, in nm. The points are generated once, from the starting values, and stay fixed during the fit.
 - `point_params`: values that replace the starting values only for generating the points (with the ties applied), such as `(r=50,)`: then the number of points comes from a ring of radius 50 nm, whatever the starting radius. Only the shape parameters that set the number of points matter: a ring's `r` and a cap's `s` (`r1`, `s2`, … in a composite). Unknown names are ignored with a warning.
-- `dtype`: the floating-point type of the fit, `Float64` by default. `Float32` is faster on large models (a cap fit 1.6×) but can stop early, before the gradient reaches `tol` (a known issue: NOTES.md).
+- `dtype`: the floating-point type of the fit, `Float64` by default. `Float32` is faster on large models (a cap fit 1.6×) but can stop early, before the gradient reaches `tol` (a known issue: DESIGN.md).
 - `background`: whether some localizations are background, uniform over the field of view; their share is f0 of `fractions`.
 - `fov_volume`: the volume (area, in 2D) of the field of view the localizations were selected from, in nm³ (nm²). Without it, the bounding box of the localizations is used, which is a little smaller.
 - `history`: also record the loss and the parameters after every iteration (for debugging and videos of the fit).

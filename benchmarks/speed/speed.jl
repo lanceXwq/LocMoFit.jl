@@ -1,6 +1,6 @@
 # Speed of LocMoFit.jl's fits. For every model on its tutorial site (examples/data), from the moved start of test/fit.jl: the loss, its Enzyme gradient and a complete fit, in Float64 and Float32. With `threads`, also the throughput of many sites fitted at once: the accuracy benchmark's 20 sites per model (benchmarks/accuracy/data, from its generate.jl), one after another and in threads. Run from the LocMoFit.jl folder, with one thread per performance core:
 #     julia -t 8 --project=. benchmarks/speed/speed.jl [threads] [case names...]
-# BenchmarkTools comes from the global environment. Enzyme's compiled code can vary between Julia sessions (DynMoFit.jl/NOTES.md), so compare timings across more than one run.
+# BenchmarkTools comes from the global environment. Enzyme's compiled code can vary between Julia sessions (DynMoFit.jl/DESIGN.md), so compare timings across more than one run.
 using LocMoFit, BenchmarkTools, Enzyme, Printf
 using LocMoFit: loss
 include(joinpath(@__DIR__, "..", "..", "test", "tutorial.jl"))

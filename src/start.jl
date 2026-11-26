@@ -1,4 +1,4 @@
-# Starting values estimated from the localizations (derivations/derivation.qmd, Starting values from the data)
+# Starting values estimated from the localizations (derivations/derivations.qmd, Starting values from the data)
 
 const START_COARSE = 100            # candidate axes spread over the hemisphere
 const START_FINE = 64               # candidate axes around the best coarse one,

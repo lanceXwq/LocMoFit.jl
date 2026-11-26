@@ -1,9 +1,9 @@
-# Priors on every quantity a fit estimates, and `ParamToFit`, which gives each quantity its starting value and its prior (derivations/derivation.qmd, Priors on every parameter). A prior is a density of a quantity of the structure (a position, a size, a curvature, an axis, the fractions of the mixture), whatever coordinates the optimizer uses for it, and the loss adds its log density with no Jacobian (@eq-full-posterior).
+# Priors on every quantity a fit estimates, and `ParamToFit`, which gives each quantity its starting value and its prior (derivations/derivations.qmd, Priors on every parameter). A prior is a density of a quantity of the structure (a position, a size, a curvature, an axis, the fractions of the mixture), whatever coordinates the optimizer uses for it, and the loss adds its log density with no Jacobian (@eq-full-posterior).
 
 """
     Prior
 
-A prior on one quantity of a fit, or on a group of them (an axis, the fractions), given in [`ParamToFit`](@ref). Its log density, up to a constant, is added to the log-likelihood (derivations/derivation.qmd, @eq-full-posterior). The densities: [`Flat`](@ref), [`Normal`](@ref), [`LogNormal`](@ref), [`Dirichlet`](@ref), [`Watson`](@ref), [`Bingham`](@ref); and the point masses [`Fixed`](@ref) and [`Tied`](@ref), which hold a quantity at its starting value or at another quantity's value.
+A prior on one quantity of a fit, or on a group of them (an axis, the fractions), given in [`ParamToFit`](@ref). Its log density, up to a constant, is added to the log-likelihood (derivations/derivations.qmd, @eq-full-posterior). The densities: [`Flat`](@ref), [`Normal`](@ref), [`LogNormal`](@ref), [`Dirichlet`](@ref), [`Watson`](@ref), [`Bingham`](@ref); and the point masses [`Fixed`](@ref) and [`Tied`](@ref), which hold a quantity at its starting value or at another quantity's value.
 """
 abstract type Prior end
 
@@ -32,7 +32,7 @@ end
 """
     LogNormal(mu, sigma)
 
-The log-normal density of a size (nm): its logarithm is normal with mean `mu` and standard deviation `sigma`, so its median is exp(`mu`) and it spreads by a factor exp(`sigma`) (derivations/derivation.qmd, @eq-lognormal). It vanishes at 0, so a size with this prior cannot shrink to a point. Its most probable value, which a fit's maximum favors, is exp(`mu` − `sigma`²). The default of a ring's `r` and a cap's `s` is `LogNormal(log(50) + 1, 1)`: most probable at 50 nm, median 136 nm, 95% of it between 19 and 965 nm.
+The log-normal density of a size (nm): its logarithm is normal with mean `mu` and standard deviation `sigma`, so its median is exp(`mu`) and it spreads by a factor exp(`sigma`) (derivations/derivations.qmd, @eq-lognormal). It vanishes at 0, so a size with this prior cannot shrink to a point. Its most probable value, which a fit's maximum favors, is exp(`mu` − `sigma`²). The default of a ring's `r` and a cap's `s` is `LogNormal(log(50) + 1, 1)`: most probable at 50 nm, median 136 nm, 95% of it between 19 and 965 nm.
 """
 struct LogNormal{T<:Real} <: Prior
     mu::T
@@ -48,7 +48,7 @@ end
     Dirichlet(alpha)
     Dirichlet(alpha0, alpha1, …, alphaK)
 
-The Dirichlet density of the fractions of a fit's mixture, ∝ ∏ₖ fₖ^(alphaₖ − 1) (derivations/derivation.qmd, @eq-fraction-prior): with a background, its fraction f₀ and each component's f₁, …, f_K (the parameters in that order); without one, the components' shares. One `alpha` is the same for every fraction. Each must be at least 1 (below 1 the density grows without bound as a fraction goes to 0). It acts like alphaₖ − 1 extra localizations from the background and from each component (@eq-fraction-map), and keeps every fraction above 0, so that no component can be switched off. On the signal fraction π = 1 − f₀ and the shares it is a Beta density of π, with parameters Σₖ₌₁ᴷ(alphaₖ − 1) + 1 and alpha0, and the Dirichlet density of the shares with alpha1, …, alphaK (@eq-fraction-split). The default is `Dirichlet(2, 5, …, 5)` with a background (for one component the Beta(5, 2) density of π, mode 0.8; for two, as 8 extra signal localizations and 1 background one, a pull toward π = 8/9 that grows with the number of components), and `Dirichlet(5)` without.
+The Dirichlet density of the fractions of a fit's mixture, ∝ ∏ₖ fₖ^(alphaₖ − 1) (derivations/derivations.qmd, @eq-fraction-prior): with a background, its fraction f₀ and each component's f₁, …, f_K (the parameters in that order); without one, the components' shares. One `alpha` is the same for every fraction. Each must be at least 1 (below 1 the density grows without bound as a fraction goes to 0). It acts like alphaₖ − 1 extra localizations from the background and from each component (@eq-fraction-map), and keeps every fraction above 0, so that no component can be switched off. On the signal fraction π = 1 − f₀ and the shares it is a Beta density of π, with parameters Σₖ₌₁ᴷ(alphaₖ − 1) + 1 and alpha0, and the Dirichlet density of the shares with alpha1, …, alphaK (@eq-fraction-split). The default is `Dirichlet(2, 5, …, 5)` with a background (for one component the Beta(5, 2) density of π, mode 0.8; for two, as 8 extra signal localizations and 1 background one, a pull toward π = 8/9 that grows with the number of components), and `Dirichlet(5)` without.
 """
 struct Dirichlet{A<:Union{Real,Tuple{Vararg{Real}}}} <: Prior
     alpha::A
@@ -67,7 +67,7 @@ end
 """
     Watson(theta, phi, kappa)
 
-The Watson density of an axis on the sphere, ∝ exp(`kappa` (μ·n)²), with μ the unit vector at polar angle `theta` and azimuth `phi` (derivations/derivation.qmd, @eq-watson). It gives n and −n the same density, as the likelihood does. `kappa > 0` keeps the axis near ±μ, `kappa < 0` near the great circle perpendicular to μ (with `theta = 0`, an axis near the xy plane), and `kappa = 0` is uniform. For component k > 1 of a composite, μ is in component 1's frame, as the axis is.
+The Watson density of an axis on the sphere, ∝ exp(`kappa` (μ·n)²), with μ the unit vector at polar angle `theta` and azimuth `phi` (derivations/derivations.qmd, @eq-watson). It gives n and −n the same density, as the likelihood does. `kappa > 0` keeps the axis near ±μ, `kappa < 0` near the great circle perpendicular to μ (with `theta = 0`, an axis near the xy plane), and `kappa = 0` is uniform. For component k > 1 of a composite, μ is in component 1's frame, as the axis is.
 """
 struct Watson{T<:Real} <: Prior
     theta::T
@@ -82,7 +82,7 @@ end
 """
     Bingham(terms::Watson...)
 
-The Bingham density of an axis on the sphere, ∝ exp(Σⱼ kappaⱼ (μⱼ·n)²): the product of the Watson densities `terms`, whose exponents it adds (derivations/derivation.qmd, @eq-bingham). With perpendicular μ's it holds the axis to a different spread in each direction: `Bingham(Watson(0, 0, -1000), Watson(π/2, -π/2, 2.6))` keeps an axis near the xy plane (its tilt out of it with SD ≈ 1/√(2·1000) rad ≈ 1.3°) and near ±y within it (its turn with SD ≈ 1/√(2·2.6) rad ≈ 25°). It gives n and −n the same density and is proper for every kappa. For component k > 1 of a composite, the μ's are in component 1's frame, as the axis is.
+The Bingham density of an axis on the sphere, ∝ exp(Σⱼ kappaⱼ (μⱼ·n)²): the product of the Watson densities `terms`, whose exponents it adds (derivations/derivations.qmd, @eq-bingham). With perpendicular μ's it holds the axis to a different spread in each direction: `Bingham(Watson(0, 0, -1000), Watson(π/2, -π/2, 2.6))` keeps an axis near the xy plane (its tilt out of it with SD ≈ 1/√(2·1000) rad ≈ 1.3°) and near ±y within it (its turn with SD ≈ 1/√(2·2.6) rad ≈ 25°). It gives n and −n the same density and is proper for every kappa. For component k > 1 of a composite, the μ's are in component 1's frame, as the axis is.
 """
 struct Bingham{W<:Tuple{Vararg{Watson}}} <: Prior
     terms::W
@@ -136,7 +136,7 @@ struct Size{n} <: Quantity end
 struct Curvature{n,s} <: Quantity end
 # the axis of component k, from its chart coordinates vx, vy: as m = normalize((vx, vy, 1)), the axis in the chart's frame
 struct Axis{k,vx,vy} <: Quantity end
-# the log fractions of the mixture, log softmax(ω₀, 0, ω₂, …) with a background and log softmax(0, ω₂, …) without (derivations/derivation.qmd, @eq-logfractions), with the parameters ω₂, … named `names`
+# the log fractions of the mixture, log softmax(ω₀, 0, ω₂, …) with a background and log softmax(0, ω₂, …) without (derivations/derivations.qmd, @eq-logfractions), with the parameters ω₂, … named `names`
 struct Fractions{background,names} <: Quantity end
 
 quantity(::Location{n}, θ) where {n} = getfield(θ, n)
@@ -156,7 +156,7 @@ function quantity(::Fractions{background,names}, θ) where {background,names}
     return lw .- logsumexp(lw)
 end
 
-# A Watson or Bingham density in the chart's coordinates, the quadratic form mᵀA′m with A′ = R₀ᵀAR₀ for the axis n = R₀m and A = Σⱼ κⱼμⱼμⱼᵀ, fixed for the whole fit (derivations/derivation.qmd, Axes): its six distinct entries a₁₁, a₂₂, a₃₃, a₁₂, a₁₃, a₂₃
+# A Watson or Bingham density in the chart's coordinates, the quadratic form mᵀA′m with A′ = R₀ᵀAR₀ for the axis n = R₀m and A = Σⱼ κⱼμⱼμⱼᵀ, fixed for the whole fit (derivations/derivations.qmd, Axes): its six distinct entries a₁₁, a₂₂, a₃₃, a₁₂, a₁₃, a₂₃
 struct ChartQuadratic{T} <: Prior
     a::NTuple{6,T}
 end
@@ -229,7 +229,7 @@ function start_values(::Axis{k}, v, axes) where {k}
         throw(ArgumentError("an axis is given as (theta, phi), got $(repr(v))"))
     return (axes[k][1] => v[1], axes[k][2] => v[2])
 end
-# ωₖ = log(fₖ/f₁), with f₁ the fraction of component 1 (derivations/derivation.qmd, @eq-softmax)
+# ωₖ = log(fₖ/f₁), with f₁ the fraction of component 1 (derivations/derivations.qmd, @eq-softmax)
 function start_values(q::Fractions{background}, v, axes) where {background}
     n = nfractions(q)
     length(v) == n && all(>(0), v) || throw(

@@ -1,4 +1,4 @@
-# Fits of the tutorial data (examples/data: one simulated site per model, 15% background, a 300 nm field of view), from the benchmark's moved start: positions +5 nm, sizes ×1.15 (a cap's κ′ ×0.85), starting axes moved by 0.15 rad in θ and ϕ, blur 2 nm, the default signal fraction and shares. Every error must stay within 4× the scatter of one fit, measured over the 20 sites of the accuracy benchmark in the same setting (benchmarks/accuracy/fractions_prior_2026-11-17.txt, background, moved start, Float64); an axis's error within its mean plus 4× its scatter. Under the default prior on the fractions, Dirichlet(2, 5, …, 5), the signal fraction showed no bias there, so it gets 4× its scatter too. The default share prior moves the ring's share of the cap with a ring by +0.0075 there (from 0.3 toward 1/2, derivations/derivation.qmd, @eq-share-map), so that share must stay within 4× its scatter of that bias.
+# Fits of the tutorial data (examples/data: one simulated site per model, 15% background, a 300 nm field of view), from the benchmark's moved start: positions +5 nm, sizes ×1.15 (a cap's κ′ ×0.85), starting axes moved by 0.15 rad in θ and ϕ, blur 2 nm, the default signal fraction and shares. Every error must stay within 4× the scatter of one fit, measured over the 20 sites of the accuracy benchmark in the same setting (benchmarks/accuracy/fractions_prior_2026-11-17.txt, background, moved start, Float64); an axis's error within its mean plus 4× its scatter. Under the default prior on the fractions, Dirichlet(2, 5, …, 5), the signal fraction showed no bias there, so it gets 4× its scatter too. The default share prior moves the ring's share of the cap with a ring by +0.0075 there (from 0.3 toward 1/2, derivations/derivations.qmd, @eq-share-map), so that share must stay within 4× its scatter of that bias.
 
 # The helpers are those of tutorial.jl, which runtests.jl includes.
 
@@ -84,7 +84,7 @@ end
 end
 
 @testset "fits from the estimated start" begin
-    # with no starting values given, every 3D tutorial fit starts from the data and reaches the optimum the moved-start fit reaches (or a better one), the fit that the testsets above check against the truth: its loss no more than 0.01 per localization above, the threshold NOTES.md counts a miss by, while the wrong maxima found on simulated sites lay 0.04–0.7 above
+    # with no starting values given, every 3D tutorial fit starts from the data and reaches the optimum the moved-start fit reaches (or a better one), the fit that the testsets above check against the truth: its loss no more than 0.01 per localization above, the threshold DESIGN.md counts a miss by, while the wrong maxima found on simulated sites lay 0.04–0.7 above
     for (case, model) in (
         ("ring", "Ring"),
         ("spcap", "SphericalCap"),

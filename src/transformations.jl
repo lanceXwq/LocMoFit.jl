@@ -12,7 +12,7 @@ end
 """
     chart_rotation(R₀, vx, vy)
 
-The rotation that orients a model whose axis has tangent-chart coordinates `(vx, vy)`. The chart's frame `R₀` (from `rotmat(θ₀, ϕ₀)` of the starting axis) turns z to its center; the axis is `R₀·m` with `m = normalize((vx, vy, 1))`, and the rotation is `R₀` times the minimal rotation taking z to `m`. `m₃ > 0` for every `(vx, vy)`, so that minimal rotation never meets its singularity (at `m = -z`), and the chart reaches every axis within 90° of its center (derivations/derivation.qmd).
+The rotation that orients a model whose axis has tangent-chart coordinates `(vx, vy)`. The chart's frame `R₀` (from `rotmat(θ₀, ϕ₀)` of the starting axis) turns z to its center; the axis is `R₀·m` with `m = normalize((vx, vy, 1))`, and the rotation is `R₀` times the minimal rotation taking z to `m`. `m₃ > 0` for every `(vx, vy)`, so that minimal rotation never meets its singularity (at `m = -z`), and the chart reaches every axis within 90° of its center (derivations/derivations.qmd).
 """
 function chart_rotation(R₀::AbstractMatrix, vx, vy)
     r = inv(sqrt(1 + vx^2 + vy^2))

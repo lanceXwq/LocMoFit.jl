@@ -164,7 +164,7 @@ function problem(
     free_parameters(merge(full_parameters(u, p.parameter_map), chart), p.parameter_map)
 end
 
-# The likelihood of derivations/derivation.qmd with plain loops: per localization, the mean of the Gaussian densities over each component's points (variances precision² + σ²), the components weighted by their fractions w, mixed with a uniform background of density 1/V at fraction f0 (`nothing`: no background); minus the log posterior with the log prior `logprior`, per localization.
+# The likelihood of derivations/derivations.qmd with plain loops: per localization, the mean of the Gaussian densities over each component's points (variances precision² + σ²), the components weighted by their fractions w, mixed with a uniform background of density 1/V at fraction f0 (`nothing`: no background); minus the log posterior with the log prior `logprior`, per localization.
 function reference_loss(locs, precs, Ys, w, σ; f0=nothing, V=1.0, logprior=0.0)
     D, N = size(locs)
     total = 0.0
@@ -222,7 +222,7 @@ function every_prior(model)
         end,
     )
 end
-# The log prior of derivations/derivation.qmd (Priors on every parameter) with plain formulas, for the priors `priors` at the parameters θ: each density at its quantity, a size's magnitude, a cap's κ′ = sign(s)·sin(α/2), an axis by the independent construction `pose` (for component 2, in component 1's frame), the fractions.
+# The log prior of derivations/derivations.qmd (Priors on every parameter) with plain formulas, for the priors `priors` at the parameters θ: each density at its quantity, a size's magnitude, a cap's κ′ = sign(s)·sin(α/2), an axis by the independent construction `pose` (for component 2, in component 1's frame), the fractions.
 function reference_log_prior(model, θ, starts, priors)
     total = 0.0
     for (name, prior) in pairs(priors)
@@ -277,7 +277,7 @@ end
     y = [10 * pseudo(i, j + 50) for i in 1:3, j in 1:20]
     s = [0.5 + abs(pseudo(i, j + 99)) for i in 1:3, j in 1:10]
     σ = 1.5
-    # far from the origin (40 µm), single precision keeps each localization's log density: rounding the coordinates to Float32 moves each difference by at most u, one unit in the last place at 40 µm (0.004 nm), so the log density of each Gaussian errs by at most Σ_d (2|x_d - y_d|·u + u²)/(2v_d) (derivations/derivation.qmd), and the log of their mean by at most the largest of these, a few hundredths here; expanding the square would err by about ε·x²/v ≈ 20
+    # far from the origin (40 µm), single precision keeps each localization's log density: rounding the coordinates to Float32 moves each difference by at most u, one unit in the last place at 40 µm (0.004 nm), so the log density of each Gaussian errs by at most Σ_d (2|x_d - y_d|·u + u²)/(2v_d) (derivations/derivations.qmd), and the log of their mean by at most the largest of these, a few hundredths here; expanding the square would err by about ε·x²/v ≈ 20
     logp(T, shift) = [
         log_likelihood(
             T.(x[:, n:n] .+ shift),
@@ -447,7 +447,7 @@ end
 end
 
 @testset "the fraction prior's optimum" begin
-    # two rings 2 µm apart along their axis, n₁ and n₂ localizations exactly on them, no background: every localization comes from its own ring (q = 0 or 1 in derivations/derivation.qmd, @eq-shares), so the share that maximizes the posterior is (n₂ + α - 1)/(n + 2(α - 1)) (@eq-share-map), n₂/n for the flat Dirichlet(1), whose term is 0 (Dirichlet(1) rather than Flat() reuses the compiled loss). The fits also check what a fit without a background returns
+    # two rings 2 µm apart along their axis, n₁ and n₂ localizations exactly on them, no background: every localization comes from its own ring (q = 0 or 1 in derivations/derivations.qmd, @eq-shares), so the share that maximizes the posterior is (n₂ + α - 1)/(n + 2(α - 1)) (@eq-share-map), n₂/n for the flat Dirichlet(1), whose term is 0 (Dirichlet(1) rather than Flat() reuses the compiled loss). The fits also check what a fit without a background returns
     n1, n2, r = 30, 10, 50.0
     ring(n, z) = reduce(
         hcat,
@@ -490,7 +490,7 @@ end
 end
 
 @testset "changing the length unit" begin
-    # every length divided by L (positions, radii, scales, the blur, the spacing, and the log-normal priors' medians): the posterior's geometry is the same, and the loss (minus the log posterior per localization) drops by (D + J/N)·log L exactly, with J log-normal priors (derivations/derivation.qmd, @eq-units-priors)
+    # every length divided by L (positions, radii, scales, the blur, the spacing, and the log-normal priors' medians): the posterior's geometry is the same, and the loss (minus the log posterior per localization) drops by (D + J/N)·log L exactly, with J log-normal priors (derivations/derivations.qmd, @eq-units-priors)
     L = 2.5
     scaled(θ) = NamedTuple{keys(θ)}(
         Tuple(
@@ -518,7 +518,7 @@ end
 end
 
 @testset "priors" begin
-    # where the likelihood does not depend on a quantity, the fit ends at its prior's mode (derivations/derivation.qmd, Priors on every parameter): the height of a ring in 2D under a normal density; and the cap of a SpCapRing whose fraction is held at 10⁻²⁰, fitted to a ring's localizations with a background, so that the cap's density is negligible next to the background's: its height z2 at the normal's mean, its scale at the log-normal's mode exp(μ - σ²), its κ′ at the normal's mean, and its axis along ±d under a Bingham density that holds it near the plane perpendicular to ν = (θ, ϕ) = (0.5 + π/2, 1) (κ = −5) and pulls it toward d = (0.5, 1), which is perpendicular to ν, within that plane (κ = 2): d is the eigenvector of A with the largest eigenvalue, 2, against 0 and −5
+    # where the likelihood does not depend on a quantity, the fit ends at its prior's mode (derivations/derivations.qmd, Priors on every parameter): the height of a ring in 2D under a normal density; and the cap of a SpCapRing whose fraction is held at 10⁻²⁰, fitted to a ring's localizations with a background, so that the cap's density is negligible next to the background's: its height z2 at the normal's mean, its scale at the log-normal's mode exp(μ - σ²), its κ′ at the normal's mean, and its axis along ±d under a Bingham density that holds it near the plane perpendicular to ν = (θ, ϕ) = (0.5 + π/2, 1) (κ = −5) and pulls it toward d = (0.5, 1), which is perpendicular to ν, within that plane (κ = 2): d is the eigenvector of A with the largest eigenvalue, 2, against 0 and −5
     (_, model, θ, starts) = CASES[1]
     locs, precs = test_data(model, θ, starts; D=2)
     held = Tuple(k for k in keys(case_params(model, θ, starts)) if k != :z)
@@ -828,7 +828,7 @@ end
 end
 
 @testset "starting values from the data" begin
-    # derivations/derivation.qmd, Starting values from the data: noise-free points with isotropic precisions, so that the expected values follow from the geometry
+    # derivations/derivations.qmd, Starting values from the data: noise-free points with isotropic precisions, so that the expected values follow from the geometry
     estimate_start = LocMoFit.estimate_start
     n, c = direction(0.4, 1.1), [3.0, -2.0, 5.0]
     R = rotation(0.4, 1.1)                          # turns z to n

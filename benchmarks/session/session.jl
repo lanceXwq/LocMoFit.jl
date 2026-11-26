@@ -1,4 +1,4 @@
-# What a fresh Julia session pays before LocMoFit.jl fits fast, as it would in SMAPpy through juliacall (NOTES.md, Using LocMoFit.jl from SMAPpy): the time to load the package, the first fit of every model on its tutorial site (examples/data), which compiles it, the median of five fits after it, and the peak memory. The counterpart for LocMoFitPy is its benchmarks/speed/session.py. The script must be the session's first work, so run it in a new process, from the LocMoFit.jl folder:
+# What a fresh Julia session pays before LocMoFit.jl fits fast, as it would in SMAPpy through juliacall (DESIGN.md, Using LocMoFit.jl from SMAPpy): the time to load the package, the first fit of every model on its tutorial site (examples/data), which compiles it, the median of five fits after it, and the peak memory. The counterpart for LocMoFitPy is its benchmarks/speed/session.py. The script must be the session's first work, so run it in a new process, from the LocMoFit.jl folder:
 #     julia --project=. benchmarks/session/session.jl
 t0 = time()
 using LocMoFit

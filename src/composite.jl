@@ -5,7 +5,7 @@ Several simple models fitted together as one structure. Component 1 is placed in
 
 Each component's parameters keep their names with the component's number appended (`x1`, `r1`, `x2`, `s2`, `alpha2`, …); the blur `sigma` is shared. Shape parameters are absolute (a ring's radius and a cap's scale in nm): to make two of them equal, tie them (`tie=(:r2 => :r1,)` in [`run_locmofit`](@ref)). `defaults` overrides the generated default starting values.
 
-Component k explains a share wₖ of the signal localizations, with its points averaged on their own. The shares are `softmax(0, omega2, …, omegaK)`, so the parameters `omega2, …, omegaK` (log wₖ/w₁) are fitted, with the background's `omega0` among the fractions of the mixture (derivations/derivation.qmd, @eq-softmax); they start at 0 (equal shares).
+Component k explains a share wₖ of the signal localizations, with its points averaged on their own. The shares are `softmax(0, omega2, …, omegaK)`, so the parameters `omega2, …, omegaK` (log wₖ/w₁) are fitted, with the background's `omega0` among the fractions of the mixture (derivations/derivations.qmd, @eq-softmax); they start at 0 (equal shares).
 """
 struct Composite{C<:Tuple{Vararg{SimpleModel}},D<:NamedTuple,L} <: Model
     components::C

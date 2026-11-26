@@ -4,7 +4,7 @@ juliacall needs a Julia environment that has LocMoFit and PythonCall at juliacal
 
     PYTHON_JULIACALL_EXE=julia PYTHON_JULIACALL_PROJECT=<LocMoFit.jl folder> python ...
 
-Importing the module starts Julia and loads LocMoFit (a few seconds); the first fit of a session compiles (40–50 s; NOTES.md, Using LocMoFit.jl from SMAPpy).
+Importing the module starts Julia and loads LocMoFit (a few seconds); the first fit of a session compiles (40–50 s; DESIGN.md, Using LocMoFit.jl from SMAPpy).
 """
 
 from collections.abc import Mapping

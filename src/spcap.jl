@@ -1,7 +1,7 @@
 """
     SphericalCap()
 
-A spherical cap of constant area 4πs², with its apex at its position `(x, y, z)` and its outward normal along its axis. Its shape is fitted as `alpha`, the half-angle from the axis to the rim seen from the sphere's center, which gives the dimensionless curvature κ′ = sin(`alpha`/2) = curvature × `s` (derivations/derivation.qmd, @eq-cap-alpha): 0 is a flat disc of radius 2s, ±π/2 a half-sphere, ±π the whole sphere of radius s, and a negative `alpha` bends the other way. The sphere's radius is s/κ′. This is DynMoSim's `Bend`, and the cap MATLAB LocMoFit parametrizes by its surface area and close angle.
+A spherical cap of constant area 4πs², with its apex at its position `(x, y, z)` and its outward normal along its axis. Its shape is fitted as `alpha`, the half-angle from the axis to the rim seen from the sphere's center, which gives the dimensionless curvature κ′ = sin(`alpha`/2) = curvature × `s` (derivations/derivations.qmd, @eq-cap-alpha): 0 is a flat disc of radius 2s, ±π/2 a half-sphere, ±π the whole sphere of radius s, and a negative `alpha` bends the other way. The sphere's radius is s/κ′. This is DynMoSim's `Bend`, and the cap MATLAB LocMoFit parametrizes by its surface area and close angle.
 """
 struct SphericalCap <: SimpleModel end
 

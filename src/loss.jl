@@ -1,14 +1,14 @@
-# The likelihood of derivations/derivation.qmd: each localization's density is a mixture of the structure (the mean of Gaussians over each component's model points, the components weighted) and a uniform background.
+# The likelihood of derivations/derivations.qmd: each localization's density is a mixture of the structure (the mean of Gaussians over each component's model points, the components weighted) and a uniform background.
 
 """
     loss(u, p)
 
-The objective of a fit: minus the log posterior of the parameters, per localization (derivations/derivation.qmd, @eq-full-posterior). `u` holds the free parameters; `p` (from [`fit_problem`](@ref)) holds the model, the map to all parameters, the unit model (unit points and chart frames) and the rows of each component's points (`ranges`), the localizations and their precisions (`D×N`), the background: whether there is one (with the parameter `omega0` of its fraction) and the log of the field of view's volume, and the priors (`priors`, a tuple of [`PriorTerm`](@ref)s).
+The objective of a fit: minus the log posterior of the parameters, per localization (derivations/derivations.qmd, @eq-full-posterior). `u` holds the free parameters; `p` (from [`fit_problem`](@ref)) holds the model, the map to all parameters, the unit model (unit points and chart frames) and the rows of each component's points (`ranges`), the localizations and their precisions (`D×N`), the background: whether there is one (with the parameter `omega0` of its fraction) and the log of the field of view's volume, and the priors (`priors`, a tuple of [`PriorTerm`](@ref)s).
 """
 function loss(u, p)
     θ = full_parameters(u, p.parameter_map)
     points = model_points(p.model, p.unit_model, θ)
-    # the log fractions of the mixture, log softmax(ω₀, 0, ω₂, …) (derivations/derivation.qmd, @eq-logfractions)
+    # the log fractions of the mixture, log softmax(ω₀, 0, ω₂, …) (derivations/derivations.qmd, @eq-logfractions)
     lw = log_weights(p.model, θ)
     if p.background
         lse = logsumexp((θ.omega0, lw...))
@@ -24,7 +24,7 @@ end
 """
     log_likelihood(locs, loc_prec, points, ranges, σ, logw, b)
 
-Σₙ log(pₙ + eᵇ) over the localizations (the columns of the `D×N` `locs`, with precisions `loc_prec`), where pₙ is the structure's density at localization n: for each component k, whose model points are the columns `ranges[k]` of `points` (of which the first `D` rows are used), the mean of the Gaussians around its points with per-axis variances `loc_prec² + σ²`; the components weighted by `exp.(logw)`. In a fit, `logw` are the log fractions of the components and `b` the log of the background's density times its fraction (derivations/derivation.qmd, @eq-mixture); `b = -Inf` means no background.
+Σₙ log(pₙ + eᵇ) over the localizations (the columns of the `D×N` `locs`, with precisions `loc_prec`), where pₙ is the structure's density at localization n: for each component k, whose model points are the columns `ranges[k]` of `points` (of which the first `D` rows are used), the mean of the Gaussians around its points with per-axis variances `loc_prec² + σ²`; the components weighted by `exp.(logw)`. In a fit, `logw` are the log fractions of the components and `b` the log of the background's density times its fraction (derivations/derivations.qmd, @eq-mixture); `b = -Inf` means no background.
 
 The squared distances are formed from differences (not expanded), so the result keeps its precision far from the origin, also in `Float32`. For each localization the terms of its model points are kept, so that [`likelihood_pass`](@ref) computes the gradient from them without evaluating them again; Enzyme uses that gradient through the rule in `rules.jl`.
 """
@@ -35,7 +35,7 @@ end
 """
     likelihood_pass(locs, loc_prec, points, ranges, σ, logw, b, Val(gradient)) -> (ℓ, ∇ℓ)
 
-[`log_likelihood`](@ref) and, with `Val(true)`, its gradient with respect to `points` (`3×M`), `σ`, `logw` and `b`, as a `NamedTuple` (`nothing` with `Val(false)`). For each localization, the terms of every component are kept in a buffer, one per point, and once the localization's density is known one more pass over them gives the derivatives with respect to the points and the variances (derivations/derivation.qmd).
+[`log_likelihood`](@ref) and, with `Val(true)`, its gradient with respect to `points` (`3×M`), `σ`, `logw` and `b`, as a `NamedTuple` (`nothing` with `Val(false)`). For each localization, the terms of every component are kept in a buffer, one per point, and once the localization's density is known one more pass over them gives the derivatives with respect to the points and the variances (derivations/derivations.qmd).
 """
 function likelihood_pass(
     locs::AbstractMatrix, loc_prec, points, ranges, σ, logw, b, gradient::Val
